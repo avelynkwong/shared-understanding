@@ -1,0 +1,113 @@
+[
+    {
+        "subtype": "channel_join",
+        "user": "UHTK8JDSM",
+        "text": "<@UHTK8JDSM> has joined the channel",
+        "inviter": "UC1J51Z6F",
+        "type": "message",
+        "ts": "1601490741.001400"
+    },
+    {
+        "subtype": "channel_join",
+        "user": "UERULSN72",
+        "text": "<@UERULSN72> has joined the channel",
+        "inviter": "UC1J51Z6F",
+        "type": "message",
+        "ts": "1601490741.001200"
+    },
+    {
+        "user": "UC1J51Z6F",
+        "type": "message",
+        "ts": "1601486096.001000",
+        "bot_id": "BCQFVE4DV",
+        "text": "cat",
+        "team": "T7HD0J5GF",
+        "bot_profile": {
+            "id": "BCQFVE4DV",
+            "deleted": false,
+            "name": "giphy",
+            "updated": 1536351005,
+            "app_id": "A0F827J2C",
+            "icons": {
+                "image_36": "https://a.slack-edge.com/dc483/img/plugins/giphy/service_72.png",
+                "image_48": "https://a.slack-edge.com/dc483/img/plugins/giphy/service_48.png",
+                "image_72": "https://a.slack-edge.com/dc483/img/plugins/giphy/service_72.png"
+            },
+            "team_id": "T7HD0J5GF"
+        },
+        "thread_ts": "1601486096.001000",
+        "reply_count": 2,
+        "reply_users_count": 1,
+        "latest_reply": "1601490771.002800",
+        "reply_users": [
+            "U7HD0J5P1"
+        ],
+        "is_locked": false,
+        "subscribed": false,
+        "blocks": [
+            {
+                "type": "image",
+                "block_id": "3S+Cf",
+                "image_url": "https://media1.giphy.com/media/VbnUQpnihPSIgIXuZv/giphy-downsized.gif?cid=6104955e3d173d35910ff7dd93695bd29673660a558ffbae&rid=giphy-downsized.gif",
+                "alt_text": "cat",
+                "title": {
+                    "type": "plain_text",
+                    "text": "cat",
+                    "emoji": true
+                },
+                "fallback": "384x480px image",
+                "image_width": 384,
+                "image_height": 480,
+                "image_bytes": 1882876,
+                "is_animated": true
+            },
+            {
+                "type": "context",
+                "block_id": "MfpX",
+                "elements": [
+                    {
+                        "type": "image",
+                        "image_url": "https://a.slack-edge.com/dc483/img/plugins/giphy/service_32.png",
+                        "alt_text": "giphy logo"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "Posted using /giphy",
+                        "verbatim": false
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "subtype": "channel_join",
+        "user": "UC1J51Z6F",
+        "text": "<@UC1J51Z6F> has joined the channel",
+        "type": "message",
+        "ts": "1601486040.000600"
+    },
+    {
+        "subtype": "channel_purpose",
+        "user": "UV3RGDHFF",
+        "purpose": "Watch Felix Grow!",
+        "text": "set the channel description: Watch Felix Grow!",
+        "type": "message",
+        "ts": "1601485965.000300",
+        "reactions": [
+            {
+                "name": "heart",
+                "users": [
+                    "UERULSN72"
+                ],
+                "count": 1
+            }
+        ]
+    },
+    {
+        "subtype": "channel_join",
+        "user": "UV3RGDHFF",
+        "text": "<@UV3RGDHFF> has joined the channel",
+        "type": "message",
+        "ts": "1601485964.000200"
+    }
+]
