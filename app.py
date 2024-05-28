@@ -1,19 +1,20 @@
 import os
-import json
 import time
 from slack_bolt import App
 import pandas as pd
-from collections import defaultdict
+from datetime import datetime
 
 def add_messages_to_df(df, msg_list, channel_id):
     # dict to store each message instance
-    msg_dict = defaultdict(None)
+    msg_dict = {}
     for msg in msg_list:
-        msg_dict['year'] = None
+        ts = msg['ts']
+        year = datetime.fromtimestamp(float(ts)).year
+        msg_dict['year'] = year
         msg_dict['channel_id'] = channel_id
         msg_dict['channel_name'] = conversations[channel_id]
         msg_dict['user_id'] = msg['user']
-        msg_dict['timestamp'] = msg['ts']
+        msg_dict['timestamp'] = ts
         msg_dict['text'] = msg['text']
         msg_dict['replies_cnt'] = msg.get('reply_count', 0)
         reacts = msg.get('reactions', None)
@@ -38,11 +39,6 @@ def get_paged_messages(df, bot_token, channel_id='C01BHE9FNQ6', start_time='0', 
     
     df = add_messages_to_df(df, messages, channel_id)
 
-    # page = 0
-    # with open(f'{filename}_{page}.json', 'w') as f:
-    #     json.dump(messages, f)
-
-
     # paging through time, each page contains maximum 100 messages
     while has_more:
         # page += 1
@@ -57,9 +53,7 @@ def get_paged_messages(df, bot_token, channel_id='C01BHE9FNQ6', start_time='0', 
         has_more = history['has_more']
         df = add_messages_to_df(df, messages, channel_id)
     
-        # with open(f'{filename}_{page}.json', 'w') as f:
-        #     json.dump(messages, f)
-        return df
+    return df
 
 
 bot_token = os.environ.get("SLACK_BOT_TOKEN")
@@ -79,6 +73,7 @@ print(conversations)
 # df to store messages and metadata
 msg_df = pd.DataFrame()
 msg_df = get_paged_messages(msg_df, bot_token)
+print(msg_df)
 
 @app.event("app_home_opened")
 def update_home_tab(client, event, logger):
