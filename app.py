@@ -4,6 +4,11 @@ from slack_bolt import App
 import pandas as pd
 from datetime import datetime
 
+# globals
+START_DATE='2020-01-01'
+END_DATE='2024-01-01'
+
+# utils
 def add_messages_to_df(df, msg_list, channel_id):
     # dict to store each message instance
     msg_dict = {}
@@ -55,10 +60,8 @@ def get_paged_messages(df, bot_token, channel_id='C01BHE9FNQ6', start_time='0', 
     
     return df
 
-
+# app init
 bot_token = os.environ.get("SLACK_BOT_TOKEN")
-
-# Initialize your app with your bot token and signing secret
 app = App(
     token=bot_token,
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET")
@@ -73,58 +76,90 @@ print(conversations)
 # df to store messages and metadata
 msg_df = pd.DataFrame()
 msg_df = get_paged_messages(msg_df, bot_token)
-print(msg_df)
+# print(msg_df)
 
+# interactive components
+
+@app.block_action("startdate_picked")
+def set_start_date(ack, body, client, event, logger):
+    ack()
+    global START_DATE
+    START_DATE = body['actions'][0]['selected_date']
+    # update homescreen with correct timeframe
+
+@app.block_action("enddate_picked")
+def set_end_date(ack, body, client, event, logger):
+    ack()
+    global END_DATE
+    END_DATE = body['actions'][0]['selected_date']
+    # update homescreen with correct timeframe
+
+    
 @app.event("app_home_opened")
-def update_home_tab(client, event, logger):
+def load_homepage(client, event, logger):
     try:
+        print(event)
         # views.publish is the method that your app uses to push a view to the Home tab
         client.views_publish(
-        # the user that opened your app's app home
-        user_id=event["user"],
-        # the view object that appears in the app home
-        view={
-            "type": "home",
-            "callback_id": "home_view",
+            # the user that opened your app's app home
+            user_id=event["user"],
+            # the view object that appears in the app home
+            view={
+                "type": "home",
+                "callback_id": "home_view",
 
-            # body of the view
-            "blocks": [
-            {
-                "type": "section",
-                "text": {
-                "type": "mrkdwn",
-                "text": "*Welcome to your _App's Home tab_* :tada:"
-                }
-            },
-            {
-                "type": "divider"
-            },
-            {
-                "type": "section",
-                "text": {
-                "type": "mrkdwn",
-                "text": "This button won't do much for now but you can set up a listener for it using the `actions()` method and passing its unique `action_id`. See an example in the `examples` folder within your Bolt app."
-                }
-            },
-            {
-                "type": "actions",
-                "elements": [
+                # body of the view
+                "blocks": [
                 {
-                    "type": "button",
+                    "type": "header",
                     "text": {
-                    "type": "plain_text",
-                    "text": "Click me!"
+                        "type": "plain_text",
+                        "text": "Welcome to Shared Understanding Homepage",
+                        "emoji": True
                     }
-                }
+                },
+                {
+                    "type": "divider"
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "Select a start date:"
+                    },
+                    "accessory": {
+                        "type": "datepicker",
+                        "initial_date": START_DATE,
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Select a date",
+                            "emoji": True
+                        },
+                        "action_id": "startdate_picked"
+                    }
+		        },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "Select an end date:"
+                    },
+                    "accessory": {
+                        "type": "datepicker",
+                        "initial_date": END_DATE,
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Select a date",
+                            "emoji": True
+                        },
+                        "action_id": "enddate_picked"
+                    }
+                },
                 ]
             }
-            ]
-        }
         )
-
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
-
 
 # Ready? Start your app!
 if __name__ == "__main__":
