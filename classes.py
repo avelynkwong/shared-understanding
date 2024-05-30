@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import dataframe_image as dfi
 
 
@@ -7,8 +7,10 @@ import dataframe_image as dfi
 class SlackData:
     def __init__(self, app, bot_token) -> None:
         self.app = app
-        self.start_date = "2020-01-01"
-        self.end_date = "2024-01-01"
+        self.start_date = str(
+            (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        )
+        self.end_date = str(datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
         self.selected_conversations = []
         self.bot_token = bot_token
