@@ -4,57 +4,61 @@ from classes import SlackData
 from fastapi import FastAPI, Request
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 
-# app init
+# APP INITIALIZATION
 bot_token = os.environ.get("SLACK_BOT_TOKEN")
 app = App(token=bot_token, signing_secret=os.environ.get("SLACK_SIGNING_SECRET"))
 fastapi_app = FastAPI()
 handler = SlackRequestHandler(app)
-
-# slack data object (global)
-slack_data = SlackData(app)
+slack_data = SlackData(app, bot_token)  # instance of slackdata
 
 
-# interactive components
+# INTERACTIVE COMPONENTS
+
+
+# update the start date
 @app.block_action("startdate_picked")
 def set_start_date(ack, body):
     ack()
     slack_data.start_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
+    slack_data.update_dataframe()
 
 
+# update the end date
 @app.block_action("enddate_picked")
 def set_end_date(ack, body):
     ack()
     slack_data.end_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
+    slack_data.update_dataframe()
 
 
+# determine the list of conversations that the slack app has access to
 @app.options("select_conversations")
 def list_conversations(ack):
     # list of conversations app has access to
-    conversations = app.client.users_conversations(token=bot_token)["channels"]
-    conversations = {c["name"]: c["id"] for c in conversations}
-    slack_data.all_conversations = conversations
     conv_names = [
         {"text": {"type": "plain_text", "text": f"# {c}"}, "value": c}
-        for c in conversations.keys()
+        for c in slack_data.all_conversations.keys()
     ]
     ack({"options": conv_names})
-    # print("The slack app has access to the following conversations: ")
-    # print(conversations)
 
 
-@app.block_action("select_conversations")
+# update the selected conversations
+@app.action("select_conversations")
 def select_conversations(ack, body):
     ack()
     selected_convs = body["actions"][0]["selected_options"]
     selected_conv_names = [c["value"] for c in selected_convs]
-    print(selected_conv_names)
-    app.selected_conversations = selected_conv_names
+    slack_data.selected_conversations = selected_conv_names
+    # update homescreen with selected conversations' analysis
+    slack_data.update_dataframe()
 
 
+#
 @app.event("app_home_opened")
 def load_homepage(client, event, logger):
+    slack_data.find_conversations()
     try:
         # views.publish is the method that your app uses to push a view to the Home tab
         client.views_publish(
