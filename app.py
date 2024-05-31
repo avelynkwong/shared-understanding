@@ -1,10 +1,16 @@
 from slack_bolt import App
 from slack_bolt.adapter.fastapi import SlackRequestHandler
 from slack_data import SlackData
+from dotenv import load_dotenv
 
+# APP INITIALIZATION
+load_dotenv()
 app = App()
 handler = SlackRequestHandler(app)
 slack_data = SlackData(app, None)
+
+
+# INTERACTIVE COMPONENTS
 
 
 @app.event("app_home_opened")
@@ -91,9 +97,6 @@ def load_homepage(client, event, logger, context):
         logger.error(f"Error publishing home tab: {e}")
 
 
-# INTERACTIVE COMPONENTS
-
-
 # update the start date
 @app.block_action("startdate_picked")
 def set_start_date(ack, body):
@@ -134,6 +137,7 @@ def select_conversations(ack, body):
     slack_data.update_dataframe()
 
 
+# API ENDPOINTS
 from fastapi import FastAPI, Request
 
 api = FastAPI()
