@@ -15,7 +15,6 @@ class SlackData:
         self.selected_conversations = []
         self.bot_token = bot_token
         self.all_conversations = {}
-        self.find_conversations()
 
     def find_conversations(self):
         # list of conversations app has access to
