@@ -1,6 +1,9 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import dataframe_image as dfi
+import matplotlib.pyplot as plt
+import io
+import random
 
 
 # class to hold slack data
@@ -15,6 +18,7 @@ class SlackData:
         self.selected_conversations = []
         self.bot_token = bot_token
         self.all_conversations = {}
+        self.test_image = None
 
     def find_conversations(self):
         # list of conversations app has access to
@@ -93,3 +97,100 @@ class SlackData:
         # unix time
         unix = dt.timestamp()
         return unix
+
+    def generate_image(self):
+
+        # Generate data
+        values = [random.randint(1, 100) for _ in range(20)]
+
+        # Create plot
+        fig, ax = plt.subplots()
+        ax.plot(values)
+
+        # Save the plot to a bytes buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        buf.seek(0)
+        self.test_image = buf
+
+        plt.close(fig)
+
+    def generate_homepage_view(self):
+        view = (
+            {
+                "type": "home",
+                "callback_id": "home_view",
+                # body of the view
+                "blocks": [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Welcome to Shared Understanding Homepage",
+                            "emoji": True,
+                        },
+                    },
+                    {"type": "divider"},
+                    {
+                        "type": "section",
+                        "block_id": "section678",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "Please select the conversations you would like to analyze.",
+                        },
+                        "accessory": {
+                            "action_id": "select_conversations",
+                            "type": "multi_external_select",
+                            "placeholder": {
+                                "type": "plain_text",
+                                "text": "Select items",
+                            },
+                            "min_query_length": 1,
+                        },
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Please select the start and end dates.",
+                            "emoji": True,
+                        },
+                    },
+                    {
+                        "type": "actions",
+                        "block_id": "actions1",
+                        "elements": [
+                            {
+                                "type": "datepicker",
+                                "initial_date": self.start_date,
+                                "placeholder": {
+                                    "type": "plain_text",
+                                    "text": "Select a date",
+                                    "emoji": True,
+                                },
+                                "action_id": "startdate_picked",
+                            },
+                            {
+                                "type": "datepicker",
+                                "initial_date": self.end_date,
+                                "placeholder": {
+                                    "type": "plain_text",
+                                    "text": "Select a date",
+                                    "emoji": True,
+                                },
+                                "action_id": "enddate_picked",
+                            },
+                        ],
+                    },
+                    {
+                        "type": "image",
+                        "block_id": "test_data",
+                        "image_url": "https://loyal-positively-beetle.ngrok-free.app/test_image?t="
+                        + str(random.randint(1, 100)),
+                        "alt_text": "Here is some test data.",
+                    },
+                ],
+            },
+        )
+
+        return view[0]
