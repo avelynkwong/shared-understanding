@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import dataframe_image as dfi
 import matplotlib.pyplot as plt
 import io
-import random
+import time
 
 
 # class to hold slack data
@@ -37,7 +37,8 @@ class SlackData:
         self.msg_df = pd.DataFrame()
         for c in self.selected_conversations:
             self.get_channel_messages(c)
-        dfi.export(self.msg_df[:100], "df.png")
+        # dfi.export(self.msg_df[:100], "df.png")
+        # self.msg_df.to_csv("wip/message_df.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name):
@@ -78,7 +79,7 @@ class SlackData:
             msg_dict["year"] = year
             msg_dict["channel_id"] = channel_id
             msg_dict["channel_name"] = channel_name
-            msg_dict["user_id"] = msg["user"]
+            msg_dict["user_id"] = msg.get("user", None)
             msg_dict["timestamp"] = ts
             msg_dict["text"] = msg["text"]
             msg_dict["replies_cnt"] = msg.get("reply_count", 0)
@@ -100,16 +101,74 @@ class SlackData:
 
     def generate_image(self):
 
+        # Data for knowledge convergence
+        person1 = [
+            (1, 0.3),
+            (3, 0.4),
+            (5, 0.4),
+            (10, 0.5),
+            (15, 0.6),
+            (17, 0.7),
+            (19, 0.9),
+            (30, 1),
+        ]
+        person2 = [
+            (1, 0.2),
+            (4, 0.3),
+            (7, 0.3),
+            (8, 0.3),
+            (13, 0.4),
+            (12, 0.3),
+            (18, 0.4),
+            (27, 0.4),
+        ]
+
+        person3 = [
+            (1, 0.4),
+            (2, 0.5),
+            (6, 0.5),
+            (9, 0.6),
+            (15, 0.6),
+            (18, 0.8),
+            (22, 0.9),
+            (31, 1),
+        ]
+        # Styling
+        plt.style.use("dark_background")
+        plt.rcParams["font.size"] = 11
+
+        # Plotting
+        fig, ax = plt.subplots()
+        ax.tick_params(axis="both", which="both", length=1)
+        ax.set_xticks([0, 5, 10, 15, 20, 25, 30, 35])
+        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        ax.scatter(*zip(*person1), label="Person A", marker="o")
+        ax.scatter(*zip(*person2), label="Person B", marker="*")
+        ax.scatter(*zip(*person3), label="Person C", marker="d")
+        ax.legend(frameon=False)
+        ax.set_xlabel("Number of Documents")
+        ax.set_ylabel("Coherence")
+        ax.set_title("Team Knowledge Convergence")
+
         # Generate data
-        values = [random.randint(1, 100) for _ in range(20)]
+        # values = [random.randint(1, 100) for _ in range(20)]
 
         # Create plot
-        fig, ax = plt.subplots()
-        ax.plot(values)
+        # plt.style.use("dark_background")
+        # fig, ax = plt.subplots()
+        # ax.tick_params(axis="both", which="both", length=0)
+        # ax.set_xticks([])
+        # ax.set_yticks([])
+        # ax.plot(values)
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(True)
+        ax.spines["left"].set_visible(True)
 
         # Save the plot to a bytes buffer
         buf = io.BytesIO()
-        plt.savefig(buf, format="png")
+        plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
         buf.seek(0)
         self.test_image = buf
 
@@ -183,11 +242,20 @@ class SlackData:
                         ],
                     },
                     {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Shared Knowledge Visualizations",
+                            "emoji": True,
+                        },
+                    },
+                    {"type": "divider"},
+                    {
                         "type": "image",
                         "block_id": "test_data",
                         "image_url": "https://loyal-positively-beetle.ngrok-free.app/test_image?t="
-                        + str(random.randint(1, 100)),
-                        "alt_text": "Here is some test data.",
+                        + str(time.time()),
+                        "alt_text": "Knowledge Convergence Graph",
                     },
                 ],
             },
