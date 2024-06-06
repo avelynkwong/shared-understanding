@@ -5,8 +5,11 @@ import matplotlib.pyplot as plt
 import io
 import time
 
+# maximum messages to store in dataframe
+MAX_DF_SIZE = 2500
 
-# class to hold slack data
+
+# class to hold slack data, each installer will have an instance of this class
 class SlackData:
     def __init__(self, app, bot_token) -> None:
         self.app = app
@@ -19,6 +22,8 @@ class SlackData:
         self.bot_token = bot_token
         self.all_conversations = {}
         self.test_image = None
+        self.sent_consent = False
+        self.consented_users = []
 
     def find_conversations(self):
         # list of conversations app has access to
@@ -57,7 +62,7 @@ class SlackData:
         self.add_messages_to_df(messages, channel_name, channel_id)
 
         # paging through time, each page contains maximum 100 messages
-        while has_more:
+        while has_more and len(self.msg_df.index) < MAX_DF_SIZE:
             # page += 1
             prev_ts = messages[-1]["ts"]
             history = self.app.client.conversations_history(
@@ -69,6 +74,12 @@ class SlackData:
             messages = history["messages"]
             has_more = history["has_more"]
             self.add_messages_to_df(messages, channel_name, channel_id)
+
+        if len(self.msg_df.index) > MAX_DF_SIZE:
+            print(
+                f"Attempting to pull more than {MAX_DF_SIZE} Slack messages. Clipping to {MAX_DF_SIZE}..."
+            )
+            self.msg_df = self.msg_df[:MAX_DF_SIZE]
 
     def add_messages_to_df(self, msg_list, channel_name, channel_id):
         # dict to store each message instance
@@ -174,7 +185,7 @@ class SlackData:
 
         plt.close(fig)
 
-    def generate_homepage_view(self):
+    def generate_homepage_view(self, bot_token):
         view = (
             {
                 "type": "home",
@@ -195,7 +206,7 @@ class SlackData:
                         "block_id": "section678",
                         "text": {
                             "type": "mrkdwn",
-                            "text": "Please select the conversations you would like to analyze.",
+                            "text": f"Please select the conversations you would like to analyze. A maximum of {MAX_DF_SIZE} Slack messsages can be analyzed at once.",
                         },
                         "accessory": {
                             "action_id": "select_conversations",
@@ -207,6 +218,7 @@ class SlackData:
                             "min_query_length": 1,
                         },
                     },
+                    {"type": "divider"},
                     {
                         "type": "section",
                         "text": {
@@ -253,8 +265,7 @@ class SlackData:
                     {
                         "type": "image",
                         "block_id": "test_data",
-                        "image_url": "https://loyal-positively-beetle.ngrok-free.app/test_image?t="
-                        + str(time.time()),
+                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?token={bot_token}&t={str(time.time())}",
                         "alt_text": "Knowledge Convergence Graph",
                     },
                 ],

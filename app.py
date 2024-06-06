@@ -3,12 +3,15 @@ from slack_bolt.adapter.fastapi import SlackRequestHandler
 from slack_data import SlackData
 from dotenv import load_dotenv
 from slack_sdk import WebClient
+from slack_sdk.web import WebClient
+import os
+from fastapi import HTTPException
 
 # APP INITIALIZATION
 load_dotenv()
 app = App()
 handler = SlackRequestHandler(app)
-slack_data = SlackData(app, None)
+user_data = {}
 
 
 # INTERACTIVE COMPONENTS
@@ -16,8 +19,10 @@ slack_data = SlackData(app, None)
 
 @app.event("app_home_opened")
 def load_homepage(client, event, logger, context):
-
-    slack_data.bot_token = context.bot_token
+    # create new object if it doesn't exist
+    slack_data = user_data.setdefault(
+        context.bot_token, SlackData(app, context.bot_token)
+    )
     slack_data.find_conversations()
 
     # update homepage
@@ -26,7 +31,7 @@ def load_homepage(client, event, logger, context):
             # the user that opened your app's app home
             user_id=event["user"],
             # the view object that appears in the app home
-            view=slack_data.generate_homepage_view(),
+            view=slack_data.generate_homepage_view(context.bot_token),
         )
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
@@ -36,6 +41,9 @@ def load_homepage(client, event, logger, context):
 @app.block_action("startdate_picked")
 def set_start_date(ack, body, context, logger):
     ack()
+    slack_data = user_data.setdefault(
+        context.bot_token, SlackData(app, context.bot_token)
+    )
     slack_data.start_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
     slack_data.update_dataframe()
@@ -44,7 +52,7 @@ def set_start_date(ack, body, context, logger):
     try:
         client.views_publish(
             user_id=body["user"]["id"],
-            view=slack_data.generate_homepage_view(),
+            view=slack_data.generate_homepage_view(context.bot_token),
         )
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
@@ -54,6 +62,10 @@ def set_start_date(ack, body, context, logger):
 @app.block_action("enddate_picked")
 def set_end_date(ack, body, context, logger):
     ack()
+    print(user_data)
+    slack_data = user_data.setdefault(
+        context.bot_token, SlackData(app, context.bot_token)
+    )
     slack_data.end_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
     slack_data.update_dataframe()
@@ -62,7 +74,7 @@ def set_end_date(ack, body, context, logger):
     try:
         client.views_publish(
             user_id=body["user"]["id"],
-            view=slack_data.generate_homepage_view(),
+            view=slack_data.generate_homepage_view(context.bot_token),
         )
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
@@ -70,7 +82,10 @@ def set_end_date(ack, body, context, logger):
 
 # determine the list of conversations that the slack app has access to
 @app.options("select_conversations")
-def list_conversations(ack):
+def list_conversations(ack, context):
+    slack_data = user_data.setdefault(
+        context.bot_token, SlackData(app, context.bot_token)
+    )
     # list of conversations app has access to
     conv_names = [
         {"text": {"type": "plain_text", "text": f"# {c}"}, "value": c}
@@ -83,6 +98,9 @@ def list_conversations(ack):
 @app.action("select_conversations")
 def select_conversations(ack, body, context, logger):
     ack()
+    slack_data = user_data.setdefault(
+        context.bot_token, SlackData(app, context.bot_token)
+    )
     selected_convs = body["actions"][0]["selected_options"]
     selected_conv_names = [c["value"] for c in selected_convs]
     slack_data.selected_conversations = selected_conv_names
@@ -93,7 +111,7 @@ def select_conversations(ack, body, context, logger):
     try:
         client.views_publish(
             user_id=body["user"]["id"],
-            view=slack_data.generate_homepage_view(),
+            view=slack_data.generate_homepage_view(context.bot_token),
         )
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
@@ -137,8 +155,8 @@ async def slack_interactions(request: Request):
 
 # generate an image served at a url
 @api.get("/test_image")
-async def get_image():
-
+async def get_image(token: str):
+    slack_data = user_data.setdefault(token, SlackData(app, token))
     slack_data.generate_image()
 
     # Return the image as a response
