@@ -4,9 +4,10 @@ import dataframe_image as dfi
 import matplotlib.pyplot as plt
 import io
 import time
+from consent_form import generate_consent_form
 
 # maximum messages to store in dataframe
-MAX_DF_SIZE = 2500
+MAX_DF_SIZE = 5000
 
 
 # class to hold slack data, each installer will have an instance of this class
@@ -21,9 +22,28 @@ class SlackData:
         self.selected_conversations = []
         self.bot_token = bot_token
         self.all_conversations = {}
+        self.find_conversations()
         self.test_image = None
-        self.sent_consent = False
-        self.consented_users = []
+        self.consented_users = set()
+        self.send_consent_form()  # on startup, send consent form to # general?
+
+    def send_consent_form(self):
+
+        #! TODO: change back to general
+        public_channels = self.app.client.conversations_list(
+            token=self.bot_token, types="public_channel", exclude_archived=True
+        )["channels"]
+        # public_channels = {c["name"]: c["id"] for c in public_channels}
+        # id = public_channels["general"]
+
+        id = self.all_conversations["avelyn-test"]
+        form = generate_consent_form()
+        self.app.client.chat_postMessage(
+            text="Slack Data Consent Form",
+            token=self.bot_token,
+            channel=id,
+            blocks=form,
+        )
 
     def find_conversations(self):
         # list of conversations app has access to
@@ -83,26 +103,33 @@ class SlackData:
 
     def add_messages_to_df(self, msg_list, channel_name, channel_id):
         # dict to store each message instance
+        exclusions = 0
         msg_dict = {}
         for msg in msg_list:
-            ts = msg["ts"]
-            year = datetime.fromtimestamp(float(ts)).year
-            msg_dict["year"] = year
-            msg_dict["channel_id"] = channel_id
-            msg_dict["channel_name"] = channel_name
-            msg_dict["user_id"] = msg.get("user", None)
-            msg_dict["timestamp"] = ts
-            msg_dict["text"] = msg["text"]
-            msg_dict["replies_cnt"] = msg.get("reply_count", 0)
-            reacts = msg.get("reactions", None)
-            reacts_cnt = 0
-            if reacts:
-                for react in reacts:
-                    reacts_cnt += react["count"]
-            msg_dict["reacts_cnt"] = reacts_cnt
-            self.msg_df = pd.concat(
-                [self.msg_df, pd.DataFrame([msg_dict])], ignore_index=True
-            )
+            user_id = msg.get("user", None)
+            if user_id in self.consented_users:
+                ts = msg["ts"]
+                year = datetime.fromtimestamp(float(ts)).year
+                msg_dict["year"] = year
+                msg_dict["channel_id"] = channel_id
+                msg_dict["channel_name"] = channel_name
+                msg_dict["user_id"] = msg.get("user", None)
+                msg_dict["timestamp"] = ts
+                msg_dict["text"] = msg["text"]
+                msg_dict["replies_cnt"] = msg.get("reply_count", 0)
+                reacts = msg.get("reactions", None)
+                reacts_cnt = 0
+                if reacts:
+                    for react in reacts:
+                        reacts_cnt += react["count"]
+                msg_dict["reacts_cnt"] = reacts_cnt
+                self.msg_df = pd.concat(
+                    [self.msg_df, pd.DataFrame([msg_dict])], ignore_index=True
+                )
+            else:
+                exclusions += 1
+
+        print(f"Number of messages excluded due to unconsenting users: {exclusions}")
 
     def str_timezone_to_unix(self, str_time):
         dt = datetime.strptime(str_time, "%Y-%m-%d")
