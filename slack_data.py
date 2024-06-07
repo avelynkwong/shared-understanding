@@ -63,7 +63,7 @@ class SlackData:
         for c in self.selected_conversations:
             self.get_channel_messages(c)
         # dfi.export(self.msg_df[:100], "df.png")
-        # self.msg_df.to_csv("wip/message_df.csv")
+        self.msg_df.to_csv("wip/message_df.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name):

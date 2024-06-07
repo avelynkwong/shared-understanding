@@ -122,6 +122,15 @@ def remove_consented_users(ack, body, context):
     slack_data.consented_users.discard(body["user"]["id"])
 
 
+# delete user data when uninstall occurs
+@app.event("tokens_revoked")
+def remove_user_data(event):
+    revoked_tokens = event["tokens"]
+    print(f"Tokens revoked: {revoked_tokens}, removing slack data...")
+    for t in revoked_tokens:
+        user_data.pop(t, None)
+
+
 # API ENDPOINTS
 from fastapi import FastAPI, Request, Response
 

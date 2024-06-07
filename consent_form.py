@@ -4,15 +4,7 @@ def generate_consent_form():
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "SharUn is requesting access to your public channel messages. Please indicate whether you consent to having your messages analyzed:",
-            },
-        },
-        {
-            "type": "section",
-            "block_id": "poll",
-            "text": {
-                "type": "mrkdwn",
-                "text": "Do you consent to having SharUn access your public messages?",
+                "text": "SharUn is requesting access to your public channel messages. Please click the button below if you consent to having your public channel messages accessed by this application.",
             },
         },
         {
@@ -20,16 +12,16 @@ def generate_consent_form():
             "elements": [
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "Yes"},
+                    "text": {"type": "plain_text", "text": "Provide Consent"},
                     "style": "primary",
                     "action_id": "consent_yes",
                 },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "No"},
-                    "style": "danger",
-                    "action_id": "consent_no",
-                },
+                # {
+                #     "type": "button",
+                #     "text": {"type": "plain_text", "text": "No"},
+                #     "style": "danger",
+                #     "action_id": "consent_no",
+                # },
             ],
         },
     ]
