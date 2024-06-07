@@ -132,9 +132,45 @@ def select_conversations(ack, body):
     slack_data.selected_conversations = selected_conv_names
     # update homescreen with selected conversations' analysis
     slack_data.update_dataframe()
+    # update homepage
+    client = WebClient(token=context.bot_token)
+    try:
+        client.views_publish(
+            user_id=body["user"]["id"],
+            view=slack_data.generate_homepage_view(context.bot_token),
+        )
+    except Exception as e:
+        logger.error(f"Error publishing home tab: {e}")
 
 
-from fastapi import FastAPI, Request
+@app.action("consent_yes")
+def add_consented_users(ack, body, context):
+    ack()
+    slack_data = user_data[context.bot_token]
+    slack_data.consented_users.add(body["user"]["id"])
+    channel_id = body["channel"]["id"]
+    user_name = body["user"]["username"]
+    update_message(context.bot_token, app.client, channel_id, user_name)
+
+
+@app.action("consent_no")
+def remove_consented_users(ack, body, context):
+    ack()
+    slack_data = user_data[context.bot_token]
+    slack_data.consented_users.discard(body["user"]["id"])
+
+
+# delete user data when uninstall occurs
+@app.event("tokens_revoked")
+def remove_user_data(event):
+    revoked_tokens = event["tokens"]
+    print(f"Tokens revoked: {revoked_tokens}, removing slack data...")
+    # for t in revoked_tokens:
+    #     user_data.pop(t, None)
+
+
+# API ENDPOINTS
+from fastapi import FastAPI, Request, Response
 
 api = FastAPI()
 
@@ -159,6 +195,7 @@ async def slack_events(request: Request):
     return await handler.handle(request)
 
 
+# API endpoint for posting the list of conversations to choose from
 @api.post("/slack/options")
 async def slack_options(request: Request):
     return await handler.handle(request)

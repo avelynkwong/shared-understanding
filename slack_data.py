@@ -7,9 +7,7 @@ import dataframe_image as dfi
 class SlackData:
     def __init__(self, app, bot_token) -> None:
         self.app = app
-        self.start_date = str(
-            (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-        )
+        self.start_date = str((datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"))
         self.end_date = str(datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
         self.selected_conversations = []
