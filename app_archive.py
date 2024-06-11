@@ -96,7 +96,7 @@ def load_homepage(client, event, logger):
     )
     bot_token = installation.bot_token
     slack_data = SlackData(app, bot_token)
-    slack_data.find_conversations()
+    slack_data.get_invited_conversations()
     try:
         # views.publish is the method that your app uses to push a view to the Home tab
         client.views_publish(

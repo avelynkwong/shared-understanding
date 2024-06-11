@@ -28,7 +28,7 @@ def generate_consent_form():
 
 
 def update_message(bot_token, client, channel_id, user_name):
-    text = f"<@{user_name}> provided consent!"
+    text = f"Thank you for providing consent <@{user_name}>! No further action is required."
     try:
         client.chat_postMessage(token=bot_token, channel=channel_id, text=text)
     except Exception as e:

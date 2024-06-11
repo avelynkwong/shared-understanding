@@ -19,37 +19,111 @@ class SlackData:
         self.msg_df = pd.DataFrame()
         self.selected_conversations = []
         self.bot_token = bot_token
-        self.all_conversations = {}
-        self.find_conversations()
+        self.all_invited_conversations = {}
+        self.get_invited_conversations()
         self.test_image = None
         self.consented_users = set()
         self.send_consent_form()  # on startup, send consent form to # general?
 
     def send_consent_form(self):
 
-        #! TODO: change back to general
-        public_channels = self.app.client.conversations_list(
-            token=self.bot_token, types="public_channel", exclude_archived=True
-        )["channels"]
+        # get channel with the most members
+        max_members = 0
+        largest_channel_id = None
+        largest_channel_name = None
+        channels_info = self.app.client.conversations_list(
+            token=self.bot_token,
+            types="public_channel",
+            exclude_archived=True,
+            limit=200,
+        )
+        public_channels = channels_info["channels"]
+        for pc in public_channels:
+            if pc["num_members"] > max_members:
+                max_members = pc["num_members"]
+                largest_channel_id = pc["id"]
+                largest_channel_name = pc["name"]
+        next_cursor = channels_info["response_metadata"]["next_cursor"]
+
+        # page through all public channels in workspace
+        while next_cursor:
+            channels_info = self.app.client.conversations_list(
+                token=self.bot_token,
+                types="public_channel",
+                exclude_archived=True,
+                next_cursor=next_cursor,
+                limit=200,
+            )
+            public_channels = channels_info["channels"]
+            for pc in public_channels:
+                if pc["num_members"] > max_members:
+                    max_members = pc["num_members"]
+                    largest_channel_id = pc["id"]
+                    largest_channel_name = pc["name"]
+            next_cursor = channels_info["response_metadata"]["next_cursor"]
+
+        print(
+            f"Largest channel: {largest_channel_name}, number of members: {max_members}"
+        )
+
+        # get a list of all members in the channel
+        #! TODO: change back to actual largest_channel
+        largest_channel_id = "C077M8073Q8"
+        all_member_ids = []
+        members_info = self.app.client.conversations_members(
+            token=self.bot_token, channel=largest_channel_id
+        )
+        member_ids = members_info["members"]
+        all_member_ids.extend(member_ids)
+        next_cursor = members_info["response_metadata"]["next_cursor"]
+
+        # page through members
+        while next_cursor:
+            members_info = self.app.client.conversations_members(
+                token=self.bot_token, channel=largest_channel_id, cursor=next_cursor
+            )
+            member_ids = members_info["members"]
+            all_member_ids.extend(member_ids)
+            next_cursor = members_info["response_metadata"]["next_cursor"]
+
+        # send consent form to each member
+        form = generate_consent_form()
+        for m in all_member_ids:
+            # check if member is a bot
+            is_bot = self.app.client.users_info(token=self.bot_token, user=m)["user"][
+                "is_bot"
+            ]
+            # open a DM and send a message
+            if not is_bot:
+                response = self.app.client.conversations_open(
+                    token=self.bot_token, users=m
+                )
+                channel_id = response["channel"]["id"]
+                self.app.client.chat_postMessage(
+                    text="Slack Data Consent Form",
+                    token=self.bot_token,
+                    channel=channel_id,
+                    blocks=form,
+                )
+
         # public_channels = {c["name"]: c["id"] for c in public_channels}
         # id = public_channels["general"]
 
-        id = self.all_conversations["avelyn-test"]
-        form = generate_consent_form()
-        self.app.client.chat_postMessage(
-            text="Slack Data Consent Form",
-            token=self.bot_token,
-            channel=id,
-            blocks=form,
-        )
+        # form = generate_consent_form()
+        # self.app.client.chat_postMessage(
+        #     text="Slack Data Consent Form",
+        #     token=self.bot_token,
+        #     channel=largest_channel_id,
+        #     blocks=form,
+        # )
 
-    def find_conversations(self):
-        # list of conversations app has access to
+    def get_invited_conversations(self):
+        # list of conversations app has access to (has been invited into channel)
         conversations = self.app.client.users_conversations(token=self.bot_token)[
             "channels"
         ]
         conversations = {c["name"]: c["id"] for c in conversations}
-        self.all_conversations = conversations
+        self.all_invited_conversations = conversations
         return
 
     # populate dataframe with messages from all selected channels
@@ -66,7 +140,7 @@ class SlackData:
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name):
         print(f"Getting messages for channel {channel_name}")
-        channel_id = self.all_conversations[channel_name]
+        channel_id = self.all_invited_conversations[channel_name]
         history = self.app.client.conversations_history(
             token=self.bot_token,
             channel=channel_id,
@@ -210,7 +284,7 @@ class SlackData:
 
         plt.close(fig)
 
-    def generate_homepage_view(self, bot_token):
+    def generate_homepage_view(self, user_id, bot_token):
         view = (
             {
                 "type": "home",
@@ -231,7 +305,7 @@ class SlackData:
                         "block_id": "section678",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"Please select the conversations you would like to analyze. A maximum of {MAX_DF_SIZE} Slack messsages can be analyzed at once.",
+                            "text": f"To get started, add this Slack application to one or more public channels and select the conversation(s) you would like to analyze. A maximum of {MAX_DF_SIZE} Slack messsages can be analyzed at once.",
                         },
                         "accessory": {
                             "action_id": "select_conversations",
@@ -290,11 +364,80 @@ class SlackData:
                     {
                         "type": "image",
                         "block_id": "test_data",
-                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?token={bot_token}&t={str(time.time())}",
+                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?user_id={user_id}&token={bot_token}&t={str(time.time())}",
                         "alt_text": "Knowledge Convergence Graph",
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "style": "primary",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": "Submit Results",
+                                    "emoji": True,
+                                },
+                                "value": "submit_analysis",
+                                "action_id": "submit_analysis",
+                            }
+                        ],
                     },
                 ],
             },
         )
 
         return view[0]
+
+    info = {
+        "ok": True,
+        "user": {
+            "id": "U070EJ574TS",
+            "team_id": "T7HD0J5GF",
+            "name": "avelyn.wong",
+            "deleted": False,
+            "color": "73769d",
+            "real_name": "Avelyn Wong",
+            "tz": "America/New_York",
+            "tz_label": "Eastern Daylight Time",
+            "tz_offset": -14400,
+            "profile": {
+                "title": "",
+                "phone": "",
+                "skype": "",
+                "real_name": "Avelyn Wong",
+                "real_name_normalized": "Avelyn Wong",
+                "display_name": "",
+                "display_name_normalized": "",
+                "fields": None,
+                "status_text": "",
+                "status_emoji": "",
+                "status_emoji_display_info": [],
+                "status_expiration": 0,
+                "avatar_hash": "ae946ac378a5",
+                "image_original": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_original.png",
+                "is_custom_image": True,
+                "first_name": "Avelyn",
+                "last_name": "Wong",
+                "image_24": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_24.png",
+                "image_32": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_32.png",
+                "image_48": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_48.png",
+                "image_72": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_72.png",
+                "image_192": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_192.png",
+                "image_512": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_512.png",
+                "image_1024": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_1024.png",
+                "status_text_canonical": "",
+                "team": "T7HD0J5GF",
+            },
+            "is_admin": True,
+            "is_owner": False,
+            "is_primary_owner": False,
+            "is_restricted": False,
+            "is_ultra_restricted": False,
+            "is_bot": False,
+            "is_app_user": False,
+            "updated": 1716490321,
+            "is_email_confirmed": True,
+            "who_can_share_contact_card": "EVERYONE",
+        },
+    }
