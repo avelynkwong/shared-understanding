@@ -37,23 +37,53 @@ app = App(signing_secret=SLACK_SIGNING_SECRET, oauth_settings=oauth_settings)
 handler = SlackRequestHandler(app)
 user_data = {}
 
+
+# UTILS
+
+
+# create new slack data object if non-existent, send consent form if new installation
+def get_slack_data(user_id, app, bot_token, enterprise_id, team_id):
+    if not user_id in user_data:
+        user_data[user_id] = SlackData(
+            app,
+            bot_token,
+        )
+        # send consent form if new installation
+        if not installation_store.find_installation(
+            user_id=user_id, enterprise_id=enterprise_id, team_id=team_id
+        ):
+            user_data[user_id].send_consent_form()
+
+        # TODO: need to store old consented users in a database and retrieve them
+        # if for some reason the app restarts/crashes, we need to recover who consented
+        # to avoid sending the consent form again
+
+    return user_data[user_id]
+
+
 # INTERACTIVE COMPONENTS
 
 
 @app.event("app_home_opened")
 def load_homepage(client, context):
-    # create new object if it doesn't exist
-    if not context.user_id in user_data:
-        user_data[context.user_id] = SlackData(app, context.bot_token)
-    slack_data = user_data[context.user_id]
+
+    slack_data = get_slack_data(
+        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
+    )
 
     # update homepage
     try:
         client.views_publish(
+            token=context.bot_token,
             # the user that opened your app's app home
             user_id=context.user_id,
             # the view object that appears in the app home
-            view=slack_data.generate_homepage_view(context.user_id, context.bot_token),
+            view=slack_data.generate_homepage_view(
+                context.user_id,
+                context.bot_token,
+                context.enterprise_id,
+                context.team_id,
+            ),
         )
     except Exception as e:
         print(f"Error publishing home tab: {e}")
@@ -63,17 +93,23 @@ def load_homepage(client, context):
 @app.block_action("startdate_picked")
 def set_start_date(ack, body, context, logger):
     ack()
-    if not context.user_id in user_data:
-        user_data[context.user_id] = SlackData(app, context.bot_token)
-    slack_data = user_data[context.user_id]
+    slack_data = get_slack_data(
+        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
+    )
     slack_data.start_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
     slack_data.update_dataframe()
     # update homepage
     try:
         app.client.views_publish(
+            token=context.bot_token,
             user_id=body["user"]["id"],
-            view=slack_data.generate_homepage_view(context.user_id, context.bot_token),
+            view=slack_data.generate_homepage_view(
+                context.user_id,
+                context.bot_token,
+                context.enterprise_id,
+                context.team_id,
+            ),
         )
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
@@ -83,17 +119,23 @@ def set_start_date(ack, body, context, logger):
 @app.block_action("enddate_picked")
 def set_end_date(ack, body, context, logger):
     ack()
-    if not context.user_id in user_data:
-        user_data[context.user_id] = SlackData(app, context.bot_token)
-    slack_data = user_data[context.user_id]
+    slack_data = get_slack_data(
+        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
+    )
     slack_data.end_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
     slack_data.update_dataframe()
     # update homepage
     try:
         app.client.views_publish(
+            token=context.bot_token,
             user_id=context.user_id,
-            view=slack_data.generate_homepage_view(context.user_id, context.bot_token),
+            view=slack_data.generate_homepage_view(
+                context.user_id,
+                context.bot_token,
+                context.enterprise_id,
+                context.team_id,
+            ),
         )
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
@@ -102,9 +144,9 @@ def set_end_date(ack, body, context, logger):
 # determine the list of conversations that the slack app has access to
 @app.options("select_conversations")
 def list_conversations(ack, context):
-    if not context.user_id in user_data:
-        user_data[context.user_id] = SlackData(app, context.bot_token)
-    slack_data = user_data[context.user_id]
+    slack_data = get_slack_data(
+        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
+    )
     # list of conversations app has access to
     slack_data.get_invited_conversations()
     conv_names = [
@@ -118,9 +160,9 @@ def list_conversations(ack, context):
 @app.action("select_conversations")
 def select_conversations(ack, body, context, logger):
     ack()
-    if not context.user_id in user_data:
-        user_data[context.user_id] = SlackData(app, context.bot_token)
-    slack_data = user_data[context.user_id]
+    slack_data = get_slack_data(
+        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
+    )
     selected_convs = body["actions"][0]["selected_options"]
     selected_conv_names = [c["value"] for c in selected_convs]
     slack_data.selected_conversations = selected_conv_names
@@ -129,8 +171,14 @@ def select_conversations(ack, body, context, logger):
     # update homepage
     try:
         app.client.views_publish(
+            token=context.bot_token,
             user_id=context.user_id,
-            view=slack_data.generate_homepage_view(context.user_id, context.bot_token),
+            view=slack_data.generate_homepage_view(
+                context.user_id,
+                context.bot_token,
+                context.enterprise_id,
+                context.team_id,
+            ),
         )
     except Exception as e:
         logger.error(f"Error publishing home tab: {e}")
@@ -139,9 +187,9 @@ def select_conversations(ack, body, context, logger):
 @app.action("consent_yes")
 def add_consented_users(ack, body, context):
     ack()
-    if not context.user_id in user_data:
-        user_data[context.user_id] = SlackData(app, context.bot_token)
-    slack_data = user_data[context.user_id]
+    slack_data = get_slack_data(
+        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
+    )
     slack_data.consented_users.add(body["user"]["id"])
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
@@ -151,9 +199,9 @@ def add_consented_users(ack, body, context):
 @app.action("consent_no")
 def remove_consented_users(ack, body, context):
     ack()
-    if not context.user_id in user_data:
-        user_data[context.user_id] = SlackData(app, context.bot_token)
-    slack_data = user_data[context.user_id]
+    slack_data = get_slack_data(
+        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
+    )
     slack_data.consented_users.discard(body["user"]["id"])
 
 
@@ -172,8 +220,6 @@ def display_questionnaire(ack, body, context):
 def handle_questionnaire_submission(ack, body):
     ack()
     values = body["view"]["state"]["values"]
-    print(values)
-
     num_members = int(values["num_members"]["name_input"]["value"])
     industry = values["industry"]["industry"]["value"]
     work_type = values["work_type"]["industry_select"]["selected_option"]["value"]
@@ -215,7 +261,7 @@ async def event(req: Request):
 @api.get("/slack/install")
 async def install(req: Request):
     state = state_store.issue()
-    url = f"https://slack.com/oauth/v2/authorize?scope={BOT_SCOPES}&user_scope={USER_SCOPES}&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
+    url = f"https://slack.com/oauth/v2/authorize?state={state}&scope={BOT_SCOPES}&user_scope={USER_SCOPES}&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
     return RedirectResponse(url)
 
 
@@ -270,6 +316,11 @@ async def oauth_redirect(req: Request):
         )
 
         installation_store.save(installation)
+
+        # create slack_data object and send consent form
+        user_data[installation.user_id] = SlackData(app, installation.bot_token)
+        user_data[installation.user_id].send_consent_form()
+
         return {"message": "Thanks for installing!"}
     else:
         return {
@@ -296,10 +347,8 @@ async def slack_interactions(request: Request):
 
 # generate an image served at a url
 @api.get("/test_image")
-async def get_image(user_id: str, token: str, t: str):
-    if not user_id in user_data:
-        user_data[user_id] = SlackData(app, token)
-    slack_data = user_data[user_id]
+async def get_image(user_id: str, token: str, enterprise_id: str, team_id: str, t: str):
+    slack_data = get_slack_data(user_id, app, token, enterprise_id, team_id)
     slack_data.generate_image()
 
     # Return the image as a response

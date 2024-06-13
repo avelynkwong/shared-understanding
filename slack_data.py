@@ -23,7 +23,6 @@ class SlackData:
         self.get_invited_conversations()
         self.test_image = None
         self.consented_users = set()
-        self.send_consent_form()  # on startup, send consent form to # general?
 
     def send_consent_form(self):
 
@@ -284,7 +283,7 @@ class SlackData:
 
         plt.close(fig)
 
-    def generate_homepage_view(self, user_id, bot_token):
+    def generate_homepage_view(self, user_id, bot_token, enterprise_id, team_id):
         view = (
             {
                 "type": "home",
@@ -364,7 +363,7 @@ class SlackData:
                     {
                         "type": "image",
                         "block_id": "test_data",
-                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?user_id={user_id}&token={bot_token}&t={str(time.time())}",
+                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?user_id={user_id}&token={bot_token}&enterprise_id={enterprise_id}&team_id={team_id}&t={str(time.time())}",
                         "alt_text": "Knowledge Convergence Graph",
                     },
                     {
