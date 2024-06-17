@@ -8,8 +8,11 @@ from questionnaire_form import get_questionnaire
 import os
 from starlette.responses import RedirectResponse
 from slack_bolt.oauth.oauth_settings import OAuthSettings
+
 from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
 from slack_sdk.oauth.state_store import FileOAuthStateStore
+from oauth.custom_installation_store import CustomFileInstallationStore
+from oauth.custom_state_store import CustomFileOAuthStateStore
 
 load_dotenv()
 BOT_SCOPES = os.getenv("BOT_SCOPES")
@@ -21,8 +24,10 @@ REDIRECT_URI = os.getenv("SLACK_REDIRECT_URI")
 
 
 # OAUTH SETUP
-installation_store = FileInstallationStore(base_dir="./data/installations")
-state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data/states")
+# installation_store = FileInstallationStore(base_dir="./data/installations")
+installation_store = CustomFileInstallationStore()
+# state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data/states")
+state_store = CustomFileOAuthStateStore(expiration_seconds=1000)
 oauth_settings = OAuthSettings(
     client_id=os.getenv("SLACK_CLIENT_ID"),
     client_secret=os.getenv("SLACK_CLIENT_SECRET"),
@@ -237,14 +242,13 @@ def remove_user_data(event, body, context):
     for oauth_user in revoked_users["oauth"]:
         user_data.pop(oauth_user, None)
         installation_store.delete_installation(
-            team_id=team_id, user_id=oauth_user, enterprise_id=enterprise_id
+            user_id=oauth_user, enterprise_id=enterprise_id, team_id=team_id
         )
     for bot_user in revoked_users["bot"]:
         user_data.pop(bot_user, None)
         installation_store.delete_installation(
-            team_id=team_id, user_id=bot_user, enterprise_id=enterprise_id
+            user_id=bot_user, enterprise_id=enterprise_id, team_id=team_id
         )
-    print(f"Remaining users: {user_data.keys()}")
 
 
 # API ENDPOINTS
@@ -267,65 +271,99 @@ async def install(req: Request):
 
 @api.get("/slack/oauth_redirect")
 async def oauth_redirect(req: Request):
-    code = req.query_params.get("code")
-    client = WebClient()
-    oauth_response = client.oauth_v2_access(
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        redirect_uri=REDIRECT_URI,
-        code=code,
-    )
-    if oauth_response.get("ok"):
-        installed_enterprise = oauth_response.get("enterprise") or {}
-        is_enterprise_install = oauth_response.get("is_enterprise_install")
-        installed_team = oauth_response.get("team") or {}
-        installer = oauth_response.get("authed_user") or {}
-        incoming_webhook = oauth_response.get("incoming_webhook") or {}
-        bot_token = oauth_response.get("access_token")
-        # NOTE: oauth.v2.access doesn't include bot_id in response
-        bot_id = None
-        enterprise_url = None
-        if bot_token is not None:
-            auth_test = client.auth_test(token=bot_token)
-            bot_id = auth_test["bot_id"]
-            if is_enterprise_install is True:
-                enterprise_url = auth_test.get("url")
-
-        installation = Installation(
-            app_id=oauth_response.get("app_id"),
-            enterprise_id=installed_enterprise.get("id"),
-            enterprise_name=installed_enterprise.get("name"),
-            enterprise_url=enterprise_url,
-            team_id=installed_team.get("id"),
-            team_name=installed_team.get("name"),
-            bot_token=bot_token,
-            bot_id=bot_id,
-            bot_user_id=oauth_response.get("bot_user_id"),
-            bot_scopes=oauth_response.get("scope"),  # comma-separated string
-            user_id=installer.get("id"),
-            user_token=installer.get("access_token"),
-            user_scopes=installer.get("user_scope"),  # comma-separated string
-            incoming_webhook_url=incoming_webhook.get("url"),
-            incoming_webhook_channel=incoming_webhook.get("channel"),
-            incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
-            incoming_webhook_configuration_url=incoming_webhook.get(
-                "configuration_url"
-            ),
-            is_enterprise_install=is_enterprise_install,
-            token_type=oauth_response.get("token_type"),
+    state = req.query_params.get("state")
+    if state_store.consume(state):
+        code = req.query_params.get("code")
+        client = WebClient()
+        oauth_response = client.oauth_v2_access(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            redirect_uri=REDIRECT_URI,
+            code=code,
         )
+        if oauth_response.get("ok"):
+            installed_enterprise = oauth_response.get("enterprise") or {}
+            is_enterprise_install = oauth_response.get("is_enterprise_install")
+            installed_team = oauth_response.get("team") or {}
+            installer = oauth_response.get("authed_user") or {}
+            incoming_webhook = oauth_response.get("incoming_webhook") or {}
+            bot_token = oauth_response.get("access_token")
+            # NOTE: oauth.v2.access doesn't include bot_id in response
+            bot_id = None
+            enterprise_url = None
+            if bot_token is not None:
+                auth_test = client.auth_test(token=bot_token)
+                bot_id = auth_test["bot_id"]
+                if is_enterprise_install is True:
+                    enterprise_url = auth_test.get("url")
 
-        installation_store.save(installation)
+            # installation = Installation(
+            #     app_id=oauth_response.get("app_id"),
+            #     enterprise_id=installed_enterprise.get("id"),
+            #     enterprise_name=installed_enterprise.get("name"),
+            #     enterprise_url=enterprise_url,
+            #     team_id=installed_team.get("id"),
+            #     team_name=installed_team.get("name"),
+            #     bot_token=bot_token,
+            #     bot_id=bot_id,
+            #     bot_user_id=oauth_response.get("bot_user_id"),
+            #     bot_scopes=oauth_response.get("scope"),  # comma-separated string
+            #     user_id=installer.get("id"),
+            #     user_token=installer.get("access_token"),
+            #     user_scopes=installer.get("user_scope"),  # comma-separated string
+            #     incoming_webhook_url=incoming_webhook.get("url"),
+            #     incoming_webhook_channel=incoming_webhook.get("channel"),
+            #     incoming_webhook_channel_id=incoming_webhook.get("channel_id"),
+            #     incoming_webhook_configuration_url=incoming_webhook.get(
+            #         "configuration_url"
+            #     ),
+            #     is_enterprise_install=is_enterprise_install,
+            #     token_type=oauth_response.get("token_type"),
+            # )
 
-        # create slack_data object and send consent form
-        user_data[installation.user_id] = SlackData(app, installation.bot_token)
-        user_data[installation.user_id].send_consent_form()
+            installation = {
+                "app_id": oauth_response.get("app_id"),
+                "enterprise_id": installed_enterprise.get("id"),
+                "enterprise_name": installed_enterprise.get("name"),
+                "enterprise_url": enterprise_url,
+                "team_id": installed_team.get("id"),
+                "team_name": installed_team.get("name"),
+                "bot_token": bot_token,
+                "bot_id": bot_id,
+                "bot_user_id": oauth_response.get("bot_user_id"),
+                "bot_scopes": oauth_response.get("scope"),  # comma-separated string
+                "user_id": installer.get("id"),
+                "user_token": installer.get("access_token"),
+                "user_scopes": installer.get("user_scope"),  # comma-separated string
+                "incoming_webhook_url": incoming_webhook.get("url"),
+                "incoming_webhook_channel": incoming_webhook.get("channel"),
+                "incoming_webhook_channel_id": incoming_webhook.get("channel_id"),
+                "incoming_webhook_configuration_url": incoming_webhook.get(
+                    "configuration_url"
+                ),
+                "is_enterprise_install": is_enterprise_install,
+                "token_type": oauth_response.get("token_type"),
+            }
 
-        return {"message": "Thanks for installing!"}
+            installation_store.save(installation)
+
+            # create slack_data object and send consent form
+            user_data[installation["user_id"]] = SlackData(
+                app, installation["bot_token"]
+            )
+            user_data[installation["user_id"]].send_consent_form()
+            # user_data[installation.user_id] = SlackData(app, installation.bot_token)
+            # user_data[installation.user_id].send_consent_form()
+
+            return {"message": "Thanks for installing!"}
+        else:
+            return {
+                "message": "Installation Failed",
+                "error": oauth_response.get("error"),
+            }
     else:
         return {
-            "message": "Installation Failed",
-            "error": oauth_response.get("error"),
+            "message": "The state value is already expired",
         }
 
 
