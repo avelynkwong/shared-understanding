@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import io
 import time
 from consent_form import generate_consent_form
+from db.utils import get_consented_users
 
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 5000
@@ -12,7 +13,7 @@ MAX_DF_SIZE = 5000
 
 # class to hold slack data, each installer will have an instance of this class
 class SlackData:
-    def __init__(self, app, bot_token) -> None:
+    def __init__(self, app, bot_token, team_id) -> None:
         self.app = app
         self.start_date = str((datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"))
         self.end_date = str(datetime.today().strftime("%Y-%m-%d"))
@@ -22,7 +23,7 @@ class SlackData:
         self.all_invited_conversations = {}
         self.get_invited_conversations()
         self.test_image = None
-        self.consented_users = set()
+        self.team_id = team_id
 
     def send_consent_form(self):
 
@@ -176,9 +177,10 @@ class SlackData:
         # dict to store each message instance
         exclusions = 0
         msg_dict = {}
+        consented_users = get_consented_users(self.team_id)
         for msg in msg_list:
             user_id = msg.get("user", None)
-            if user_id in self.consented_users:
+            if user_id in consented_users:
                 ts = msg["ts"]
                 year = datetime.fromtimestamp(float(ts)).year
                 msg_dict["year"] = year

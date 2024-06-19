@@ -37,8 +37,16 @@ TABLES["installations"] = (
 TABLES["states"] = (
     "CREATE TABLE `states` ("
     "  `state` VARCHAR(255),"
-    "  `timestamp` FLOAT,"
+    "  `timestamp` DOUBLE,"
     "  PRIMARY KEY (`state`)"
+    ") ENGINE=InnoDB"
+)
+
+TABLES["consent"] = (
+    "CREATE TABLE `consent` ("
+    "  `team_id` VARCHAR(255),"
+    "  `user_id` VARCHAR(255),"
+    "  PRIMARY KEY (`user_id`)"
     ") ENGINE=InnoDB"
 )
 

@@ -60,10 +60,11 @@ class CustomFileOAuthStateStore(FileOAuthStateStore):
                 print("Failed to find any persistent data for state: {state} - {e}")
                 return False
             else:
-                print("Found state")
+                now = time.time()
                 created = float(result["timestamp"])
                 expiration = created + self.expiration_seconds
-                still_valid: bool = time.time() < expiration
+                print(expiration - now)
+                still_valid: bool = now < expiration
                 # delete from table
                 cursor.execute(delete_cmd, (state,))
                 cnx.commit()

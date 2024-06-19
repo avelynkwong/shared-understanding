@@ -56,7 +56,7 @@ class CustomFileInstallationStore(FileInstallationStore):
         team_id: str | None,
         is_enterprise_install: bool = None
     ):
-        select_cmd = "SELECT * FROM installations WHERE team_id = %s"
+        select_cmd = "SELECT * FROM installations WHERE team_id = %s"  # installations should be unique to TEAM not user
 
         try:
             # connect to db
@@ -70,7 +70,6 @@ class CustomFileInstallationStore(FileInstallationStore):
                 print("Installation not found")
                 return None
             else:
-                print("Found installation")
                 installation = Installation(
                     app_id=result["app_id"],
                     enterprise_id=result["enterprise_id"],

@@ -3,16 +3,20 @@ from slack_bolt.adapter.fastapi import SlackRequestHandler
 from slack_data import SlackData
 from dotenv import load_dotenv
 from slack_sdk import WebClient
-from consent_form import update_message
+from consent_form import post_consent_confirmation, post_dissent_confirmation
 from questionnaire_form import get_questionnaire
 import os
 from starlette.responses import RedirectResponse
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 
+# oauth imports
 from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
 from slack_sdk.oauth.state_store import FileOAuthStateStore
 from oauth.custom_installation_store import CustomFileInstallationStore
 from oauth.custom_state_store import CustomFileOAuthStateStore
+
+# db utils
+from db.utils import *
 
 load_dotenv()
 BOT_SCOPES = os.getenv("BOT_SCOPES")
@@ -40,7 +44,7 @@ oauth_settings = OAuthSettings(
 # APP INITIALIZATION
 app = App(signing_secret=SLACK_SIGNING_SECRET, oauth_settings=oauth_settings)
 handler = SlackRequestHandler(app)
-user_data = {}
+workspace_data = {}
 
 
 # UTILS
@@ -48,22 +52,17 @@ user_data = {}
 
 # create new slack data object if non-existent, send consent form if new installation
 def get_slack_data(user_id, app, bot_token, enterprise_id, team_id):
-    if not user_id in user_data:
-        user_data[user_id] = SlackData(
-            app,
-            bot_token,
-        )
+    if not team_id in workspace_data:
+        workspace_data[team_id] = SlackData(app, bot_token, team_id)
         # send consent form if new installation
         if not installation_store.find_installation(
             user_id=user_id, enterprise_id=enterprise_id, team_id=team_id
         ):
-            user_data[user_id].send_consent_form()
+            workspace_data[
+                team_id
+            ].send_consent_form()  # send consent form when a new team has installed
 
-        # TODO: need to store old consented users in a database and retrieve them
-        # if for some reason the app restarts/crashes, we need to recover who consented
-        # to avoid sending the consent form again
-
-    return user_data[user_id]
+    return workspace_data[team_id]
 
 
 # INTERACTIVE COMPONENTS
@@ -192,22 +191,19 @@ def select_conversations(ack, body, context, logger):
 @app.action("consent_yes")
 def add_consented_users(ack, body, context):
     ack()
-    slack_data = get_slack_data(
-        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
-    )
-    slack_data.consented_users.add(body["user"]["id"])
+    add_consent_db(context.team_id, body["user"]["id"])
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
-    update_message(context.bot_token, app.client, channel_id, user_name)
+    post_consent_confirmation(context.bot_token, app.client, channel_id, user_name)
 
 
 @app.action("consent_no")
 def remove_consented_users(ack, body, context):
     ack()
-    slack_data = get_slack_data(
-        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
-    )
-    slack_data.consented_users.discard(body["user"]["id"])
+    delete_consent_db(context.user_id)
+    channel_id = body["channel"]["id"]
+    user_name = body["user"]["username"]
+    post_dissent_confirmation(context.bot_token, app.client, channel_id, user_name)
 
 
 # listen for submission button click, open quest
@@ -240,12 +236,12 @@ def remove_user_data(event, body, context):
     enterprise_id = context["authorize_result"]["enterprise_id"]
     print(f"Tokens revoked: {revoked_users}, removing slack data...")
     for oauth_user in revoked_users["oauth"]:
-        user_data.pop(oauth_user, None)
+        workspace_data.pop(oauth_user, None)
         installation_store.delete_installation(
             user_id=oauth_user, enterprise_id=enterprise_id, team_id=team_id
         )
     for bot_user in revoked_users["bot"]:
-        user_data.pop(bot_user, None)
+        workspace_data.pop(bot_user, None)
         installation_store.delete_installation(
             user_id=bot_user, enterprise_id=enterprise_id, team_id=team_id
         )
@@ -348,12 +344,10 @@ async def oauth_redirect(req: Request):
             installation_store.save(installation)
 
             # create slack_data object and send consent form
-            user_data[installation["user_id"]] = SlackData(
-                app, installation["bot_token"]
+            workspace_data[installation["team_id"]] = SlackData(
+                app, installation["bot_token"], installation["team_id"]
             )
-            user_data[installation["user_id"]].send_consent_form()
-            # user_data[installation.user_id] = SlackData(app, installation.bot_token)
-            # user_data[installation.user_id].send_consent_form()
+            workspace_data[installation["team_id"]].send_consent_form()
 
             return {"message": "Thanks for installing!"}
         else:
