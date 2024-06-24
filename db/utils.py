@@ -12,7 +12,7 @@ config = {
 }
 
 
-def add_consent_db(team_id, user_id):
+def add_user_consent(team_id, user_id):
     insert_cmd = "INSERT INTO consent (team_id, user_id) VALUES (%s, %s)"
 
     try:
@@ -34,7 +34,7 @@ def add_consent_db(team_id, user_id):
             cnx.close()
 
 
-def delete_consent_db(user_id):
+def delete_user_consent(user_id):
     delete_cmd = "DELETE FROM consent WHERE user_id = %s"
     try:
         # connect to db
@@ -48,6 +48,32 @@ def delete_consent_db(user_id):
             print(f"No consent revoked in DB for {user_id}")
         else:
             print(f"Consent revoked in DB for {user_id}")
+
+    except mysql.connector.Error as err:
+        print("Error: {}".format(err))
+        return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if cnx:
+            cnx.close()
+
+
+def delete_team_consent(team_id):
+    delete_cmd = "DELETE FROM consent WHERE team_id = %s"
+    try:
+        # connect to db
+        cnx = mysql.connector.connect(**config)
+        cursor = cnx.cursor()
+        # execute delete cmd
+        cursor.execute(delete_cmd, (team_id,))
+        cnx.commit()
+        # check if any row affected
+        if cursor.rowcount == 0:
+            print(f"No consent deleted for team {team_id}")
+        else:
+            print(f"Consent deleted for team {team_id}")
 
     except mysql.connector.Error as err:
         print("Error: {}".format(err))
