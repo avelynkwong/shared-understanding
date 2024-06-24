@@ -25,98 +25,6 @@ class SlackData:
         self.test_image = None
         self.team_id = team_id
 
-    def send_consent_form(self):
-
-        # get channel with the most members
-        max_members = 0
-        largest_channel_id = None
-        largest_channel_name = None
-        channels_info = self.app.client.conversations_list(
-            token=self.bot_token,
-            types="public_channel",
-            exclude_archived=True,
-            limit=200,
-        )
-        public_channels = channels_info["channels"]
-        for pc in public_channels:
-            if pc["num_members"] > max_members:
-                max_members = pc["num_members"]
-                largest_channel_id = pc["id"]
-                largest_channel_name = pc["name"]
-        next_cursor = channels_info["response_metadata"]["next_cursor"]
-
-        # page through all public channels in workspace
-        while next_cursor:
-            channels_info = self.app.client.conversations_list(
-                token=self.bot_token,
-                types="public_channel",
-                exclude_archived=True,
-                next_cursor=next_cursor,
-                limit=200,
-            )
-            public_channels = channels_info["channels"]
-            for pc in public_channels:
-                if pc["num_members"] > max_members:
-                    max_members = pc["num_members"]
-                    largest_channel_id = pc["id"]
-                    largest_channel_name = pc["name"]
-            next_cursor = channels_info["response_metadata"]["next_cursor"]
-
-        print(
-            f"Largest channel: {largest_channel_name}, number of members: {max_members}"
-        )
-
-        # get a list of all members in the channel
-        #! TODO: change back to actual largest_channel
-        largest_channel_id = "C077M8073Q8"
-        all_member_ids = []
-        members_info = self.app.client.conversations_members(
-            token=self.bot_token, channel=largest_channel_id
-        )
-        member_ids = members_info["members"]
-        all_member_ids.extend(member_ids)
-        next_cursor = members_info["response_metadata"]["next_cursor"]
-
-        # page through members
-        while next_cursor:
-            members_info = self.app.client.conversations_members(
-                token=self.bot_token, channel=largest_channel_id, cursor=next_cursor
-            )
-            member_ids = members_info["members"]
-            all_member_ids.extend(member_ids)
-            next_cursor = members_info["response_metadata"]["next_cursor"]
-
-        # send consent form to each member
-        form = generate_consent_form()
-        for m in all_member_ids:
-            # check if member is a bot
-            is_bot = self.app.client.users_info(token=self.bot_token, user=m)["user"][
-                "is_bot"
-            ]
-            # open a DM and send a message
-            if not is_bot:
-                response = self.app.client.conversations_open(
-                    token=self.bot_token, users=m
-                )
-                channel_id = response["channel"]["id"]
-                self.app.client.chat_postMessage(
-                    text="Slack Data Consent Form",
-                    token=self.bot_token,
-                    channel=channel_id,
-                    blocks=form,
-                )
-
-        # public_channels = {c["name"]: c["id"] for c in public_channels}
-        # id = public_channels["general"]
-
-        # form = generate_consent_form()
-        # self.app.client.chat_postMessage(
-        #     text="Slack Data Consent Form",
-        #     token=self.bot_token,
-        #     channel=largest_channel_id,
-        #     blocks=form,
-        # )
-
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
         conversations = self.app.client.users_conversations(token=self.bot_token)[
@@ -132,13 +40,24 @@ class SlackData:
         print(f"Range: {self.start_date}, {self.end_date}")
         # clear
         self.msg_df = pd.DataFrame()
+
+        # keep track of total number of message exclusions due to unconsenting users
+        total_exclusions = 0
         for c in self.selected_conversations:
-            self.get_channel_messages(c)
+            total_exclusions += self.get_channel_messages(c)
         # dfi.export(self.msg_df[:100], "df.png")
         self.msg_df.to_csv("wip/message_df.csv")
 
+        # TODO: display this on the homepage
+        print(
+            f"Total exclusions from this query due to unconsenting users: {total_exclusions}"
+        )
+
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name):
+
+        channel_exclusions = 0
+
         print(f"Getting messages for channel {channel_name}")
         channel_id = self.all_invited_conversations[channel_name]
         history = self.app.client.conversations_history(
@@ -151,7 +70,9 @@ class SlackData:
         messages = history["messages"]
         has_more = history["has_more"]
 
-        self.add_messages_to_df(messages, channel_name, channel_id)
+        channel_exclusions += self.add_messages_to_df(
+            messages, channel_name, channel_id
+        )
 
         # paging through time, each page contains maximum 100 messages
         while has_more and len(self.msg_df.index) < MAX_DF_SIZE:
@@ -165,7 +86,9 @@ class SlackData:
             )
             messages = history["messages"]
             has_more = history["has_more"]
-            self.add_messages_to_df(messages, channel_name, channel_id)
+            channel_exclusions += self.add_messages_to_df(
+                messages, channel_name, channel_id
+            )
 
         if len(self.msg_df.index) > MAX_DF_SIZE:
             print(
@@ -173,14 +96,17 @@ class SlackData:
             )
             self.msg_df = self.msg_df[:MAX_DF_SIZE]
 
+        return channel_exclusions
+
     def add_messages_to_df(self, msg_list, channel_name, channel_id):
         # dict to store each message instance
         exclusions = 0
         msg_dict = {}
         consented_users = get_consented_users(self.team_id)
         for msg in msg_list:
+            subtype = msg.get("subtype", "*")
             user_id = msg.get("user", None)
-            if user_id in consented_users:
+            if subtype != "channel_join" and user_id in consented_users:
                 ts = msg["ts"]
                 year = datetime.fromtimestamp(float(ts)).year
                 msg_dict["year"] = year
@@ -199,10 +125,11 @@ class SlackData:
                 self.msg_df = pd.concat(
                     [self.msg_df, pd.DataFrame([msg_dict])], ignore_index=True
                 )
-            else:
+            elif (
+                subtype != "channel_join" and user_id != None
+            ):  # don't count bot users as unconsenting users
                 exclusions += 1
-
-        print(f"Number of messages excluded due to unconsenting users: {exclusions}")
+        return exclusions
 
     def str_timezone_to_unix(self, str_time):
         dt = datetime.strptime(str_time, "%Y-%m-%d")
@@ -303,7 +230,7 @@ class SlackData:
                     {"type": "divider"},
                     {
                         "type": "section",
-                        "block_id": "section678",
+                        "block_id": "conversation_select",
                         "text": {
                             "type": "mrkdwn",
                             "text": f"To get started, add this Slack application to one or more public channels and select the conversation(s) you would like to analyze. A maximum of {MAX_DF_SIZE} Slack messsages can be analyzed at once.",
@@ -329,7 +256,7 @@ class SlackData:
                     },
                     {
                         "type": "actions",
-                        "block_id": "actions1",
+                        "block_id": "datepicker",
                         "elements": [
                             {
                                 "type": "datepicker",
@@ -365,7 +292,7 @@ class SlackData:
                     {
                         "type": "image",
                         "block_id": "test_data",
-                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?user_id={user_id}&token={bot_token}&enterprise_id={enterprise_id}&team_id={team_id}&t={str(time.time())}",
+                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
                         "alt_text": "Knowledge Convergence Graph",
                     },
                     {

@@ -18,6 +18,9 @@ from oauth.custom_state_store import CustomFileOAuthStateStore
 # db utils
 from db.utils import *
 
+# consent
+from consent_form import generate_consent_form
+
 load_dotenv()
 BOT_SCOPES = os.getenv("BOT_SCOPES")
 USER_SCOPES = os.getenv("USER_SCOPES")
@@ -50,18 +53,10 @@ workspace_data = {}
 # UTILS
 
 
-# create new slack data object if non-existent, send consent form if new installation
-def get_slack_data(user_id, app, bot_token, enterprise_id, team_id):
+# create new slack data object if non-existent
+def get_slack_data(app, bot_token, team_id):
     if not team_id in workspace_data:
         workspace_data[team_id] = SlackData(app, bot_token, team_id)
-        # send consent form if new installation
-        if not installation_store.find_installation(
-            user_id=user_id, enterprise_id=enterprise_id, team_id=team_id
-        ):
-            workspace_data[
-                team_id
-            ].send_consent_form()  # send consent form when a new team has installed
-
     return workspace_data[team_id]
 
 
@@ -71,9 +66,7 @@ def get_slack_data(user_id, app, bot_token, enterprise_id, team_id):
 @app.event("app_home_opened")
 def load_homepage(client, context):
 
-    slack_data = get_slack_data(
-        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
-    )
+    slack_data = get_slack_data(app, context.bot_token, context.team_id)
 
     # update homepage
     try:
@@ -93,13 +86,80 @@ def load_homepage(client, context):
         print(f"Error publishing home tab: {e}")
 
 
+# when slack app joins a channel, send consent form to members in that channel if they haven't received it yet
+@app.event("member_joined_channel")
+def send_consent_form(event, client, context):
+    joined_user_id = event.get("user")
+    bot_user_id = client.auth_test().get("user_id")
+    form = generate_consent_form()
+
+    # check whether the member who has joined the channel is the slack app
+    if joined_user_id == bot_user_id:
+
+        add_user_consent(context.team_id, bot_user_id)  # add bot as a consenting user
+
+        channel_id = event["channel"]
+        all_channel_users = []
+        members_info = client.conversations_members(
+            token=context.bot_token, channel=channel_id
+        )
+        user_ids = members_info["members"]
+        all_channel_users.extend(user_ids)
+        next_cursor = members_info["response_metadata"]["next_cursor"]
+
+        # page through members in the channel
+        while next_cursor:
+            members_info = client.conversations_members(
+                token=context.bot_token, channel=channel_id, cursor=next_cursor
+            )
+            user_ids = members_info["members"]
+            all_channel_users.extend(user_ids)
+            next_cursor = members_info["response_metadata"]["next_cursor"]
+
+        consented_users = get_consented_users(context.team_id)
+        # get all users that haven't consented yet
+        non_consented_users = list(set(all_channel_users) - set(consented_users))
+        # send consent forms
+        for m in non_consented_users:
+            # check if member is a bot
+            is_bot = client.users_info(token=context.bot_token, user=m)["user"][
+                "is_bot"
+            ]
+            # open a DM and send a message
+            if not is_bot:
+                response = client.conversations_open(token=context.bot_token, users=m)
+                channel_id = response["channel"]["id"]
+                client.chat_postMessage(
+                    text="Slack Data Consent Form",
+                    token=context.bot_token,
+                    channel=channel_id,
+                    blocks=form,
+                )
+
+    else:  # send consent form to new user who has joined
+        is_bot = client.users_info(token=context.bot_token, user=joined_user_id)[
+            "user"
+        ]["is_bot"]
+        # open a DM and send a message
+        if not is_bot:
+            print("Sending consent form to new user")
+            response = client.conversations_open(
+                token=context.bot_token, users=joined_user_id
+            )
+            channel_id = response["channel"]["id"]
+            client.chat_postMessage(
+                text="Slack Data Consent Form",
+                token=context.bot_token,
+                channel=channel_id,
+                blocks=form,
+            )
+
+
 # update the start date
 @app.block_action("startdate_picked")
 def set_start_date(ack, body, context, logger):
     ack()
-    slack_data = get_slack_data(
-        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
-    )
+    slack_data = get_slack_data(app, context.bot_token, context.team_id)
     slack_data.start_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
     slack_data.update_dataframe()
@@ -123,9 +183,7 @@ def set_start_date(ack, body, context, logger):
 @app.block_action("enddate_picked")
 def set_end_date(ack, body, context, logger):
     ack()
-    slack_data = get_slack_data(
-        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
-    )
+    slack_data = get_slack_data(app, context.bot_token, context.team_id)
     slack_data.end_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
     slack_data.update_dataframe()
@@ -148,9 +206,7 @@ def set_end_date(ack, body, context, logger):
 # determine the list of conversations that the slack app has access to
 @app.options("select_conversations")
 def list_conversations(ack, context):
-    slack_data = get_slack_data(
-        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
-    )
+    slack_data = get_slack_data(app, context.bot_token, context.team_id)
     # list of conversations app has access to
     slack_data.get_invited_conversations()
     conv_names = [
@@ -164,9 +220,7 @@ def list_conversations(ack, context):
 @app.action("select_conversations")
 def select_conversations(ack, body, context, logger):
     ack()
-    slack_data = get_slack_data(
-        context.user_id, app, context.bot_token, context.enterprise_id, context.team_id
-    )
+    slack_data = get_slack_data(app, context.bot_token, context.team_id)
     selected_convs = body["actions"][0]["selected_options"]
     selected_conv_names = [c["value"] for c in selected_convs]
     slack_data.selected_conversations = selected_conv_names
@@ -191,7 +245,7 @@ def select_conversations(ack, body, context, logger):
 @app.action("consent_yes")
 def add_consented_users(ack, body, context):
     ack()
-    add_consent_db(context.team_id, body["user"]["id"])
+    add_user_consent(context.team_id, body["user"]["id"])
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
     post_consent_confirmation(context.bot_token, app.client, channel_id, user_name)
@@ -200,7 +254,7 @@ def add_consented_users(ack, body, context):
 @app.action("consent_no")
 def remove_consented_users(ack, body, context):
     ack()
-    delete_consent_db(context.user_id)
+    delete_user_consent(context.user_id)
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
     post_dissent_confirmation(context.bot_token, app.client, channel_id, user_name)
@@ -245,6 +299,9 @@ def remove_user_data(event, body, context):
         installation_store.delete_installation(
             user_id=bot_user, enterprise_id=enterprise_id, team_id=team_id
         )
+
+    # remove consent from db
+    delete_team_consent(team_id=team_id)
 
 
 # API ENDPOINTS
@@ -343,11 +400,10 @@ async def oauth_redirect(req: Request):
 
             installation_store.save(installation)
 
-            # create slack_data object and send consent form
+            # create slack_data object
             workspace_data[installation["team_id"]] = SlackData(
                 app, installation["bot_token"], installation["team_id"]
             )
-            workspace_data[installation["team_id"]].send_consent_form()
 
             return {"message": "Thanks for installing!"}
         else:
@@ -379,8 +435,8 @@ async def slack_interactions(request: Request):
 
 # generate an image served at a url
 @api.get("/test_image")
-async def get_image(user_id: str, token: str, enterprise_id: str, team_id: str, t: str):
-    slack_data = get_slack_data(user_id, app, token, enterprise_id, team_id)
+async def get_image(token: str, team_id: str, t: str):
+    slack_data = get_slack_data(app, token, team_id)
     slack_data.generate_image()
 
     # Return the image as a response
