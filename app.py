@@ -260,7 +260,7 @@ def remove_consented_users(ack, body, context):
     post_dissent_confirmation(context.bot_token, app.client, channel_id, user_name)
 
 
-# listen for submission button click, open quest
+# listen for submission button click, open questionnaire
 @app.action("submit_analysis")
 def display_questionnaire(ack, body, context):
     ack()
@@ -272,12 +272,15 @@ def display_questionnaire(ack, body, context):
 
 # listen for questionnaire submission button click
 @app.view("questionnaire_form")
-def handle_questionnaire_submission(ack, body):
+def handle_questionnaire_submission(ack, body, context):
     ack()
     values = body["view"]["state"]["values"]
     num_members = int(values["num_members"]["name_input"]["value"])
     industry = values["industry"]["industry"]["value"]
     work_type = values["work_type"]["industry_select"]["selected_option"]["value"]
+    # delete the dataframe to free up memory
+    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data.clear_df()
     # TODO: submit questionnaire to cloud DB
     print(f"Questionnaire submitted! Values: {num_members, industry, work_type}")
 

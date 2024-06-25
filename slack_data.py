@@ -25,6 +25,9 @@ class SlackData:
         self.test_image = None
         self.team_id = team_id
 
+    def clear_df(self):
+        self.msg_df = pd.DataFrame()
+
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
         conversations = self.app.client.users_conversations(token=self.bot_token)[
