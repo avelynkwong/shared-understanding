@@ -4,11 +4,16 @@ import dataframe_image as dfi
 import matplotlib.pyplot as plt
 import io
 import time
-from consent_form import generate_consent_form
 from db.utils import get_consented_users
+from dotenv import load_dotenv
+import os
 
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 5000
+
+# env vars
+load_dotenv()
+URI = os.getenv("SLACK_URI")
 
 
 # class to hold slack data, each installer will have an instance of this class
@@ -49,7 +54,7 @@ class SlackData:
         for c in self.selected_conversations:
             total_exclusions += self.get_channel_messages(c)
         # dfi.export(self.msg_df[:100], "df.png")
-        self.msg_df.to_csv("wip/message_df.csv")
+        # self.msg_df.to_csv("wip/message_df.csv")
 
         # TODO: display this on the homepage
         print(
@@ -131,6 +136,7 @@ class SlackData:
             elif (
                 subtype != "channel_join" and user_id != None
             ):  # don't count bot users as unconsenting users
+                # print(msg)
                 exclusions += 1
         return exclusions
 
@@ -209,7 +215,7 @@ class SlackData:
 
         # Save the plot to a bytes buffer
         buf = io.BytesIO()
-        plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
+        plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.5)
         buf.seek(0)
         self.test_image = buf
 
@@ -293,9 +299,16 @@ class SlackData:
                     },
                     {"type": "divider"},
                     {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop generating, please wait and try again later.",
+                        },
+                    },
+                    {
                         "type": "image",
                         "block_id": "test_data",
-                        "image_url": f"https://loyal-positively-beetle.ngrok-free.app/test_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                        "image_url": f"{URI}/test_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
                         "alt_text": "Knowledge Convergence Graph",
                     },
                     {
@@ -319,56 +332,3 @@ class SlackData:
         )
 
         return view[0]
-
-    info = {
-        "ok": True,
-        "user": {
-            "id": "U070EJ574TS",
-            "team_id": "T7HD0J5GF",
-            "name": "avelyn.wong",
-            "deleted": False,
-            "color": "73769d",
-            "real_name": "Avelyn Wong",
-            "tz": "America/New_York",
-            "tz_label": "Eastern Daylight Time",
-            "tz_offset": -14400,
-            "profile": {
-                "title": "",
-                "phone": "",
-                "skype": "",
-                "real_name": "Avelyn Wong",
-                "real_name_normalized": "Avelyn Wong",
-                "display_name": "",
-                "display_name_normalized": "",
-                "fields": None,
-                "status_text": "",
-                "status_emoji": "",
-                "status_emoji_display_info": [],
-                "status_expiration": 0,
-                "avatar_hash": "ae946ac378a5",
-                "image_original": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_original.png",
-                "is_custom_image": True,
-                "first_name": "Avelyn",
-                "last_name": "Wong",
-                "image_24": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_24.png",
-                "image_32": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_32.png",
-                "image_48": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_48.png",
-                "image_72": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_72.png",
-                "image_192": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_192.png",
-                "image_512": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_512.png",
-                "image_1024": "https://avatars.slack-edge.com/2024-05-21/7166757687377_ae946ac378a5e5c54123_1024.png",
-                "status_text_canonical": "",
-                "team": "T7HD0J5GF",
-            },
-            "is_admin": True,
-            "is_owner": False,
-            "is_primary_owner": False,
-            "is_restricted": False,
-            "is_ultra_restricted": False,
-            "is_bot": False,
-            "is_app_user": False,
-            "updated": 1716490321,
-            "is_email_confirmed": True,
-            "who_can_share_contact_card": "EVERYONE",
-        },
-    }

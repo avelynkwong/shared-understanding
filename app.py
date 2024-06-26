@@ -21,23 +21,26 @@ from db.utils import *
 # consent
 from consent_form import generate_consent_form
 
+# get secrets from AWS
+from get_secrets import get_secret
+
 load_dotenv()
+slack_secrets = get_secret("slack_app_secrets")
 BOT_SCOPES = os.getenv("BOT_SCOPES")
 USER_SCOPES = os.getenv("USER_SCOPES")
 CLIENT_ID = os.getenv("SLACK_CLIENT_ID")
-CLIENT_SECRET = os.getenv("SLACK_CLIENT_SECRET")
-SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
+CLIENT_SECRET = slack_secrets["SLACK_CLIENT_SECRET"]
+SLACK_SIGNING_SECRET = slack_secrets["SLACK_SIGNING_SECRET"]
 REDIRECT_URI = os.getenv("SLACK_REDIRECT_URI")
-
 
 # OAUTH SETUP
 # installation_store = FileInstallationStore(base_dir="./data/installations")
 installation_store = CustomFileInstallationStore()
 # state_store = FileOAuthStateStore(expiration_seconds=300, base_dir="./data/states")
-state_store = CustomFileOAuthStateStore(expiration_seconds=1000)
+state_store = CustomFileOAuthStateStore(expiration_seconds=800)
 oauth_settings = OAuthSettings(
-    client_id=os.getenv("SLACK_CLIENT_ID"),
-    client_secret=os.getenv("SLACK_CLIENT_SECRET"),
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
     scopes=BOT_SCOPES,
     user_scopes=USER_SCOPES,
     installation_store=installation_store,
@@ -309,8 +312,19 @@ def remove_user_data(event, body, context):
 
 # API ENDPOINTS
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+
+# rate limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 
 api = FastAPI()
+
+# configure rate limiter
+limiter = Limiter(key_func=get_remote_address)
+api.state.limiter = limiter
+api.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @api.post("/slack/events")
@@ -438,7 +452,8 @@ async def slack_interactions(request: Request):
 
 # generate an image served at a url
 @api.get("/test_image")
-async def get_image(token: str, team_id: str, t: str):
+@limiter.limit("2/minute")
+async def get_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
     slack_data.generate_image()
 
@@ -449,4 +464,4 @@ async def get_image(token: str, team_id: str, t: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(api, host="0.0.0.0", port=80)
+    uvicorn.run(api, host="0.0.0.0", port=8000)

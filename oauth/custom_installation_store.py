@@ -1,16 +1,17 @@
 from slack_sdk.oauth.installation_store import FileInstallationStore
 from slack_sdk.oauth.installation_store.models.installation import Installation
 import mysql.connector
-from dotenv import load_dotenv
-import os
+from get_secrets import get_secret
+from typing import Optional
 
-load_dotenv()
+mysql_secrets = get_secret("mysql_secrets")
 
 config = {
-    "user": "root",
-    "password": os.getenv("DB_PASSWORD"),
-    "host": "localhost",
-    "database": os.getenv("DB_NAME"),
+    "user": mysql_secrets["username"],
+    "password": mysql_secrets["password"],
+    "host": mysql_secrets["host"],
+    "port": mysql_secrets["port"],
+    "database": mysql_secrets["dbInstanceIdentifier"],
 }
 
 
@@ -51,9 +52,9 @@ class CustomFileInstallationStore(FileInstallationStore):
     def find_installation(
         self,
         *,
-        user_id: str | None = None,
-        enterprise_id: str | None,
-        team_id: str | None,
+        user_id: Optional[str] = None,
+        enterprise_id: Optional[str],
+        team_id: Optional[str],
         is_enterprise_install: bool = None
     ):
         select_cmd = "SELECT * FROM installations WHERE team_id = %s"  # installations should be unique to TEAM not user
@@ -108,9 +109,9 @@ class CustomFileInstallationStore(FileInstallationStore):
     def delete_installation(
         self,
         *,
-        user_id: str | None = None,
-        enterprise_id: str | None,
-        team_id: str | None
+        user_id: Optional[str] = None,
+        enterprise_id: Optional[str],
+        team_id: Optional[str]
     ) -> None:
         delete_cmd = "DELETE FROM installations WHERE team_id = %s"
 

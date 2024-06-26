@@ -2,11 +2,17 @@ from __future__ import print_function
 
 import mysql.connector
 from mysql.connector import errorcode
-from dotenv import load_dotenv
-import os
+from get_secrets import get_secret
 
-load_dotenv()
-DB_NAME = os.getenv("DB_NAME")
+mysql_secrets = get_secret("mysql_secrets")
+
+config = {
+    "user": mysql_secrets["username"],
+    "password": mysql_secrets["password"],
+    "host": mysql_secrets["host"],
+    "port": mysql_secrets["port"],
+}
+DB_NAME = mysql_secrets["dbInstanceIdentifier"]
 
 TABLES = {}
 TABLES["installations"] = (
@@ -50,12 +56,7 @@ TABLES["consent"] = (
     ") ENGINE=InnoDB"
 )
 
-cnx = mysql.connector.connect(
-    user="root",
-    password=os.getenv("DB_PASSWORD"),
-    host="localhost",
-    database=DB_NAME,
-)
+cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor()
 
 
@@ -67,6 +68,24 @@ def create_database(cursor):
     except mysql.connector.Error as err:
         print("Failed creating database: {}".format(err))
         exit(1)
+
+
+# Function to create or reset tables
+def create_or_reset_table(table_name, table_description):
+    try:
+        print("Creating table {}: ".format(table_name), end="")
+        cursor.execute(table_description)
+        print("OK")
+    except mysql.connector.Error as err:
+        if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
+            print(
+                "Table {} already exists. Dropping and recreating...".format(table_name)
+            )
+            cursor.execute("DROP TABLE {}".format(table_name))
+            cursor.execute(table_description)
+            print("Table {} recreated.".format(table_name))
+        else:
+            print(err.msg)
 
 
 try:
@@ -83,16 +102,8 @@ except mysql.connector.Error as err:
 
 for table_name in TABLES:
     table_description = TABLES[table_name]
-    try:
-        print("Creating table {}: ".format(table_name), end="")
-        cursor.execute(table_description)
-    except mysql.connector.Error as err:
-        if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-            print("already exists.")
-        else:
-            print(err.msg)
-    else:
-        print("OK")
+    create_or_reset_table(table_name, table_description)
+
 
 cursor.close()
 cnx.close()

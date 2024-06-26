@@ -1,17 +1,17 @@
 from slack_sdk.oauth.state_store import FileOAuthStateStore
 from uuid import uuid4
 import time
-from dotenv import load_dotenv
-import os
 import mysql.connector
+from get_secrets import get_secret
 
-load_dotenv()
+mysql_secrets = get_secret("mysql_secrets")
 
 config = {
-    "user": "root",
-    "password": os.getenv("DB_PASSWORD"),
-    "host": "localhost",
-    "database": os.getenv("DB_NAME"),
+    "user": mysql_secrets["username"],
+    "password": mysql_secrets["password"],
+    "host": mysql_secrets["host"],
+    "port": mysql_secrets["port"],
+    "database": mysql_secrets["dbInstanceIdentifier"],
 }
 
 
