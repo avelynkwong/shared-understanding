@@ -112,17 +112,37 @@ def get_consented_users(team_id):
     return consented_users
 
 
-def add_questionnaire_response(team_id, industry, work_type, n_users):
+def add_questionnaire_response(
+    team_id,
+    team_size,
+    team_duration,
+    collaboration_type,
+    industry,
+    task_type,
+    n_users_consented,
+):
     ts = time.time()
 
-    insert_cmd = "INSERT INTO ws_questionnaire (team_id, industry, work_type, timestamp, n_users) VALUES (%s, %s, %s, %s, %s)"
+    insert_cmd = "INSERT INTO analysis_results (team_id, team_size, team_duration, collaboration_type, industry, task_type, timestamp, n_users_consented) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
     try:
         # connect to db
         cnx = mysql.connector.connect(**config)
         cursor = cnx.cursor()
         # execute insert cmd
-        cursor.execute(insert_cmd, (team_id, industry, work_type, ts, n_users))
+        cursor.execute(
+            insert_cmd,
+            (
+                team_id,
+                team_size,
+                team_duration,
+                collaboration_type,
+                industry,
+                task_type,
+                ts,
+                n_users_consented,
+            ),
+        )
         cnx.commit()
 
     except mysql.connector.Error as err:
