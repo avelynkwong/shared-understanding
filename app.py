@@ -278,16 +278,24 @@ def display_questionnaire(ack, body, context):
 def handle_questionnaire_submission(ack, body, context):
     ack()
     values = body["view"]["state"]["values"]
+    team_size = values["team_size"]["team_size"]["selected_option"]["value"]
+    team_duration = values["team_duration"]["team_duration"]["selected_option"]["value"]
+    collab_type = values["collaboration_type"]["collaboration_type"]["selected_option"][
+        "value"
+    ]
     industry = values["industry"]["industry"]["value"]
-    work_type = values["work_type"]["industry_select"]["selected_option"]["value"]
+    task_type = values["task_type"]["task_type"]["selected_option"]["value"]
+    task_type_other = values["task_type_other"]["task_type_other"]["value"]
+    if task_type_other:
+        task_type = task_type_other
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
-    add_questionnaire_response(
-        context.team_id, industry, work_type, len(slack_data.analysis_users)
-    )
+    # add_questionnaire_response(
+    #     context.team_id, industry, work_type, len(slack_data.analysis_users_consented)
+    # )
     # delete the analysis-specific data to free memory
     slack_data.clear_analysis_data()
     print(
-        f"Questionnaire submitted! Values: {context.team_id, industry, work_type, len(slack_data.analysis_users)}"
+        f"Questionnaire submitted! Values: {team_size, team_duration, collab_type, industry, task_type, task_type_other}"
     )
 
 

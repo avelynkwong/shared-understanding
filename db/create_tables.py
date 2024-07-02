@@ -56,13 +56,16 @@ TABLES["consent"] = (
     ") ENGINE=InnoDB"
 )
 
-TABLES["ws_questionnaire"] = (
-    "CREATE TABLE `ws_questionnaire` ("
+TABLES["analysis_results"] = (
+    "CREATE TABLE `analysis_results` ("
     "  `team_id` VARCHAR(255),"
+    "  `team_size` VARCHAR(255),"
+    "  `team_duration` VARCHAR(255),"
+    "  `collaboration_type` VARCHAR(255),"
     "  `industry` VARCHAR(255),"
-    "  `work_type` VARCHAR(255),"
+    "  `task_type` VARCHAR(255),"
     "  `timestamp` DOUBLE,"
-    "  `n_users` DOUBLE,"
+    "  `n_users_consented` DOUBLE,"
     "  PRIMARY KEY (`team_id`)"
     ") ENGINE=InnoDB"
 )
