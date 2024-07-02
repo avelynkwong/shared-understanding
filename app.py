@@ -278,14 +278,17 @@ def display_questionnaire(ack, body, context):
 def handle_questionnaire_submission(ack, body, context):
     ack()
     values = body["view"]["state"]["values"]
-    num_members = int(values["num_members"]["name_input"]["value"])
     industry = values["industry"]["industry"]["value"]
     work_type = values["work_type"]["industry_select"]["selected_option"]["value"]
-    # delete the dataframe to free up memory
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
-    slack_data.clear_df()
-    # TODO: submit questionnaire to cloud DB
-    print(f"Questionnaire submitted! Values: {num_members, industry, work_type}")
+    add_questionnaire_response(
+        context.team_id, industry, work_type, len(slack_data.analysis_users)
+    )
+    # delete the analysis-specific data to free memory
+    slack_data.clear_analysis_data()
+    print(
+        f"Questionnaire submitted! Values: {context.team_id, industry, work_type, len(slack_data.analysis_users)}"
+    )
 
 
 # delete user data when uninstall occurs

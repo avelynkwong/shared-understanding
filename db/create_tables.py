@@ -56,6 +56,17 @@ TABLES["consent"] = (
     ") ENGINE=InnoDB"
 )
 
+TABLES["ws_questionnaire"] = (
+    "CREATE TABLE `ws_questionnaire` ("
+    "  `team_id` VARCHAR(255),"
+    "  `industry` VARCHAR(255),"
+    "  `work_type` VARCHAR(255),"
+    "  `timestamp` DOUBLE,"
+    "  `n_users` DOUBLE,"
+    "  PRIMARY KEY (`team_id`)"
+    ") ENGINE=InnoDB"
+)
+
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor()
 
@@ -78,12 +89,13 @@ def create_or_reset_table(table_name, table_description):
         print("OK")
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-            print(
-                "Table {} already exists. Dropping and recreating...".format(table_name)
-            )
-            cursor.execute("DROP TABLE {}".format(table_name))
-            cursor.execute(table_description)
-            print("Table {} recreated.".format(table_name))
+            # print(
+            #     "Table {} already exists. Dropping and recreating...".format(table_name)
+            # )
+            # cursor.execute("DROP TABLE {}".format(table_name))
+            # cursor.execute(table_description)
+            # print("Table {} recreated.".format(table_name))
+            print("Table already exists")
         else:
             print(err.msg)
 

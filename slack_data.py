@@ -29,9 +29,11 @@ class SlackData:
         self.get_invited_conversations()
         self.test_image = None
         self.team_id = team_id
+        self.analysis_users = set()
 
-    def clear_df(self):
+    def clear_analysis_data(self):
         self.msg_df = pd.DataFrame()
+        self.analysis_users = set()
 
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
@@ -115,6 +117,7 @@ class SlackData:
             subtype = msg.get("subtype", "*")
             user_id = msg.get("user", None)
             if subtype != "channel_join" and user_id in consented_users:
+                self.analysis_users.add(user_id)
                 ts = msg["ts"]
                 year = datetime.fromtimestamp(float(ts)).year
                 msg_dict["year"] = year

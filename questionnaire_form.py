@@ -22,14 +22,6 @@ def get_questionnaire():
                 }
             ),
             InputBlock(
-                block_id="num_members",
-                label={
-                    "type": "plain_text",
-                    "text": "How many members are in your workspace?",
-                },
-                element=PlainTextInputElement(action_id="name_input"),
-            ),
-            InputBlock(
                 block_id="industry",
                 label={
                     "type": "plain_text",

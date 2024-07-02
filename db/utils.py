@@ -1,6 +1,6 @@
-import os
 import mysql.connector
 from get_secrets import get_secret
+import time
 
 mysql_secrets = get_secret("mysql_secrets")
 
@@ -110,3 +110,26 @@ def get_consented_users(team_id):
             cnx.close()
 
     return consented_users
+
+
+def add_questionnaire_response(team_id, industry, work_type, n_users):
+    ts = time.time()
+
+    insert_cmd = "INSERT INTO ws_questionnaire (team_id, industry, work_type, timestamp, n_users) VALUES (%s, %s, %s, %s, %s)"
+
+    try:
+        # connect to db
+        cnx = mysql.connector.connect(**config)
+        cursor = cnx.cursor()
+        # execute insert cmd
+        cursor.execute(insert_cmd, (team_id, industry, work_type, ts, n_users))
+        cnx.commit()
+
+    except mysql.connector.Error as err:
+        print("Error: {}".format(err))
+
+    finally:
+        if cursor:
+            cursor.close()
+        if cnx:
+            cnx.close()
