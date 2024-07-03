@@ -1,10 +1,10 @@
 from slack_bolt import App
 from slack_bolt.adapter.fastapi import SlackRequestHandler
-from slack_data import SlackData
+from data.slack_data import SlackData
 from dotenv import load_dotenv
 from slack_sdk import WebClient
-from consent_form import post_consent_confirmation, post_dissent_confirmation
-from questionnaire_form import get_questionnaire
+from forms.consent_form import post_consent_confirmation, post_dissent_confirmation
+from forms.questionnaire_form import get_questionnaire
 import os
 from starlette.responses import RedirectResponse
 from slack_bolt.oauth.oauth_settings import OAuthSettings
@@ -19,7 +19,7 @@ from oauth.custom_state_store import CustomFileOAuthStateStore
 from db.utils import *
 
 # consent
-from consent_form import generate_consent_form
+from forms.consent_form import generate_consent_form
 
 # get secrets from AWS
 from get_secrets import get_secret
