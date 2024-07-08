@@ -13,7 +13,7 @@ def filter_non_dict_words(text):
     return " ".join(filtered_words)
 
 
-def generalPreprocessing(data):
+def general_preprocessing(data):
     # take out @'s and <channels!>
 
     data["text"] = data["text"].map(lambda x: re.sub(r"\<(.*[^>])>", r"", x))
