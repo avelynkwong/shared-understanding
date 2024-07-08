@@ -43,7 +43,7 @@ TABLES["installations"] = (
 TABLES["states"] = (
     "CREATE TABLE `states` ("
     "  `state` VARCHAR(255),"
-    "  `timestamp` DOUBLE,"
+    "  `timestamp` DATETIME,"
     "  PRIMARY KEY (`state`)"
     ") ENGINE=InnoDB"
 )
@@ -64,7 +64,7 @@ TABLES["analysis_results"] = (
     "  `collaboration_type` VARCHAR(255),"
     "  `industry` VARCHAR(255),"
     "  `task_type` VARCHAR(255),"
-    "  `timestamp` DOUBLE,"
+    "  `timestamp` DATETIME,"
     "  `n_users_consented` DOUBLE,"
     "  PRIMARY KEY (`team_id`)"
     ") ENGINE=InnoDB"
@@ -92,12 +92,12 @@ def create_or_reset_table(table_name, table_description):
         print("OK")
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-            # print(
-            #     "Table {} already exists. Dropping and recreating...".format(table_name)
-            # )
-            # cursor.execute("DROP TABLE {}".format(table_name))
-            # cursor.execute(table_description)
-            # print("Table {} recreated.".format(table_name))
+            print(
+                "Table {} already exists. Dropping and recreating...".format(table_name)
+            )
+            cursor.execute("DROP TABLE {}".format(table_name))
+            cursor.execute(table_description)
+            print("Table {} recreated.".format(table_name))
             print("Table already exists")
         else:
             print(err.msg)

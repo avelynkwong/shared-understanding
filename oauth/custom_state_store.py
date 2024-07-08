@@ -3,6 +3,7 @@ from uuid import uuid4
 import time
 import mysql.connector
 from get_secrets import get_secret
+import datetime
 
 mysql_secrets = get_secret("mysql_secrets")
 
@@ -21,7 +22,7 @@ class CustomFileOAuthStateStore(FileOAuthStateStore):
 
     def issue(self, *args, **kwargs) -> str:
         state = str(uuid4())
-        ts = time.time()
+        ts = datetime.datetime.now()
         insert_cmd = "INSERT INTO states (state, timestamp) VALUES (%s, %s)"
 
         try:
@@ -61,7 +62,9 @@ class CustomFileOAuthStateStore(FileOAuthStateStore):
                 return False
             else:
                 now = time.time()
-                created = float(result["timestamp"])
+                created = float(
+                    result["timestamp"].timestamp()
+                )  # convert to unix timestamp
                 expiration = created + self.expiration_seconds
                 print(expiration - now)
                 still_valid: bool = now < expiration

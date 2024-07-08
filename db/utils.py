@@ -1,6 +1,6 @@
 import mysql.connector
 from get_secrets import get_secret
-import time
+import datetime
 
 mysql_secrets = get_secret("mysql_secrets")
 
@@ -121,7 +121,7 @@ def add_questionnaire_response(
     task_type,
     n_users_consented,
 ):
-    ts = time.time()
+    ts = datetime.datetime.now()
 
     insert_cmd = "INSERT INTO analysis_results (team_id, team_size, team_duration, collaboration_type, industry, task_type, timestamp, n_users_consented) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
