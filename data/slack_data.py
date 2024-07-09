@@ -7,7 +7,7 @@ import time
 from db.utils import get_consented_users
 from dotenv import load_dotenv
 import os
-from msg_processing.data_preprocessing import *
+from nlp_analysis.data_preprocessing import *
 
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 5000
@@ -59,12 +59,13 @@ class SlackData:
         for c in self.selected_conversations:
             total_exclusions += self.get_channel_messages(c)
         # dfi.export(self.msg_df[:100], "df.png")
-        # self.msg_df.to_csv("wip/message_df.csv")
+        self.msg_df.to_csv("message_df_raw.csv")
 
         # process the df messages
         if not self.msg_df.empty:
             self.msg_df = general_preprocessing(self.msg_df)
             print("preprocessed df messages")
+            self.msg_df.to_csv("message_df_postprocessed.csv")
 
         # TODO: display this on the homepage
         print(
@@ -135,7 +136,7 @@ class SlackData:
                 msg_dict["channel_name"] = channel_name
                 msg_dict["user_id"] = msg.get("user", None)
                 msg_dict["timestamp"] = ts
-                msg_dict["text"] = msg["text"]
+                msg_dict["text"] = str(msg["text"])
                 msg_dict["replies_cnt"] = msg.get("reply_count", 0)
                 reacts = msg.get("reactions", None)
                 reacts_cnt = 0

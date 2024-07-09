@@ -4,8 +4,9 @@ import datetime
 
 def message_aggregation(agg_choice, df):
 
-    # TODO: see if works without this step
+    # TODO: see if works without these steps
     df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df["text"] = df["text"].astype(str)
 
     # TODO: make these variables settable by user
     agg_num_messages = 10
