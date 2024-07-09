@@ -439,14 +439,14 @@ async def slack_interactions(request: Request):
 
 
 # generate an image served at a url
-@api.get("/test_image")
+@api.get("/lsm_image")
 @limiter.limit("1/minute")
 async def get_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
-    slack_data.generate_image()
+    slack_data.get_lsm_vis()
 
     # Return the image as a response
-    return Response(content=slack_data.test_image.read(), media_type="image/png")
+    return Response(content=slack_data.lsm_image.read(), media_type="image/png")
 
 
 if __name__ == "__main__":

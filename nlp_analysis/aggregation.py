@@ -2,7 +2,7 @@ import pandas as pd
 import datetime
 
 
-def message_aggregation(agg_choice, df):
+def message_aggregation(df, agg_choice="date"):
 
     # TODO: see if works without these steps
     df["timestamp"] = pd.to_datetime(df["timestamp"])

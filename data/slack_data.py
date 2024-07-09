@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import datetime, timedelta
+import datetime
 import dataframe_image as dfi
 import matplotlib.pyplot as plt
 import io
@@ -8,6 +8,8 @@ from db.utils import get_consented_users
 from dotenv import load_dotenv
 import os
 from nlp_analysis.data_preprocessing import *
+from nlp_analysis.aggregation import *
+from nlp_analysis.lsm import *
 
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 5000
@@ -21,14 +23,16 @@ URI = os.getenv("SLACK_URI")
 class SlackData:
     def __init__(self, app, bot_token, team_id) -> None:
         self.app = app
-        self.start_date = str((datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"))
-        self.end_date = str(datetime.today().strftime("%Y-%m-%d"))
+        self.start_date = str(
+            (datetime.datetime.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
+        )
+        self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
         self.selected_conversations = []
         self.bot_token = bot_token
         self.all_invited_conversations = {}
         self.get_invited_conversations()
-        self.test_image = None
+        self.lsm_image = None
         self.team_id = team_id
         self.analysis_users_consented = (
             set()
@@ -59,13 +63,13 @@ class SlackData:
         for c in self.selected_conversations:
             total_exclusions += self.get_channel_messages(c)
         # dfi.export(self.msg_df[:100], "df.png")
-        self.msg_df.to_csv("message_df_raw.csv")
+        # self.msg_df.to_csv("message_df_raw.csv")
 
         # process the df messages
         if not self.msg_df.empty:
             self.msg_df = general_preprocessing(self.msg_df)
             print("preprocessed df messages")
-            self.msg_df.to_csv("message_df_postprocessed.csv")
+            # self.msg_df.to_csv("message_df_postprocessed.csv")
 
         # TODO: display this on the homepage
         print(
@@ -127,7 +131,7 @@ class SlackData:
             user_id = msg.get("user", None)
             if subtype != "channel_join" and user_id in consented_users:
                 self.analysis_users_consented.add(user_id)
-                ts = datetime.fromtimestamp(
+                ts = datetime.datetime.fromtimestamp(
                     float(msg["ts"])
                 )  # convert unix timestamp to datetime
                 year = ts.year
@@ -155,85 +159,22 @@ class SlackData:
         return exclusions
 
     def str_timezone_to_unix(self, str_time):
-        dt = datetime.strptime(str_time, "%Y-%m-%d")
+        dt = datetime.datetime.strptime(str_time, "%Y-%m-%d")
         # unix time
         unix = dt.timestamp()
         return unix
 
-    def generate_image(self):
+    def get_lsm_vis(self):
 
-        # Data for knowledge convergence
-        person1 = [
-            (1, 0.3),
-            (3, 0.4),
-            (5, 0.4),
-            (10, 0.5),
-            (15, 0.6),
-            (17, 0.7),
-            (19, 0.9),
-            (30, 1),
-        ]
-        person2 = [
-            (1, 0.2),
-            (4, 0.3),
-            (7, 0.3),
-            (8, 0.3),
-            (13, 0.4),
-            (12, 0.3),
-            (18, 0.4),
-            (27, 0.4),
-        ]
+        if not self.msg_df.empty:
+            lsm_df = message_aggregation(self.msg_df)
+            # TODO: add look and remove this hard coded value
+            lsm_df = pd.read_csv("test_agg_w_luke.csv")
 
-        person3 = [
-            (1, 0.4),
-            (2, 0.5),
-            (6, 0.5),
-            (9, 0.6),
-            (15, 0.6),
-            (18, 0.8),
-            (22, 0.9),
-            (31, 1),
-        ]
-        # Styling
-        plt.style.use("dark_background")
-        plt.rcParams["font.size"] = 11
-
-        # Plotting
-        fig, ax = plt.subplots()
-        ax.tick_params(axis="both", which="both", length=1)
-        ax.set_xticks([0, 5, 10, 15, 20, 25, 30, 35])
-        ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
-        ax.scatter(*zip(*person1), label="Person A", marker="o")
-        ax.scatter(*zip(*person2), label="Person B", marker="*")
-        ax.scatter(*zip(*person3), label="Person C", marker="d")
-        ax.legend(frameon=False)
-        ax.set_xlabel("Number of Documents")
-        ax.set_ylabel("Coherence")
-        ax.set_title("Team Knowledge Convergence")
-
-        # Generate data
-        # values = [random.randint(1, 100) for _ in range(20)]
-
-        # Create plot
-        # plt.style.use("dark_background")
-        # fig, ax = plt.subplots()
-        # ax.tick_params(axis="both", which="both", length=0)
-        # ax.set_xticks([])
-        # ax.set_yticks([])
-        # ax.plot(values)
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.spines["bottom"].set_visible(True)
-        ax.spines["left"].set_visible(True)
-
-        # Save the plot to a bytes buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.5)
-        buf.seek(0)
-        self.test_image = buf
-
-        plt.close(fig)
+            # get lsm values and generate image
+            lsm_df = LSM_application(lsm_df)
+            lsm_df = group_average(lsm_df)
+            self.lsm_image = per_channel_vis_LSM(lsm_df)
 
     def generate_homepage_view(self, user_id, bot_token, enterprise_id, team_id):
         view = (
@@ -322,7 +263,7 @@ class SlackData:
                     {
                         "type": "image",
                         "block_id": "test_data",
-                        "image_url": f"{URI}/test_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                        "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
                         "alt_text": "Knowledge Convergence Graph",
                     },
                     {
