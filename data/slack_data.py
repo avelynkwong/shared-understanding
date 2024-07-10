@@ -177,6 +177,48 @@ class SlackData:
             self.lsm_image = per_channel_vis_LSM(lsm_df)
 
     def generate_homepage_view(self, user_id, bot_token, enterprise_id, team_id):
+        vis_blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop generating, please wait and try again later.",
+                },
+            },
+            {
+                "type": "image",
+                "block_id": "test_data",
+                "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                "alt_text": "Knowledge Convergence Graph",
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Submit Results",
+                            "emoji": True,
+                        },
+                        "value": "submit_analysis",
+                        "action_id": "submit_analysis",
+                    }
+                ],
+            },
+        ]
+
+        error_blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": ":exclamation: Please select channels and/or a valid date range.",
+                },
+            },
+        ]
+
         view = (
             {
                 "type": "home",
@@ -253,37 +295,13 @@ class SlackData:
                         },
                     },
                     {"type": "divider"},
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop generating, please wait and try again later.",
-                        },
-                    },
-                    {
-                        "type": "image",
-                        "block_id": "test_data",
-                        "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
-                        "alt_text": "Knowledge Convergence Graph",
-                    },
-                    {
-                        "type": "actions",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "style": "primary",
-                                "text": {
-                                    "type": "plain_text",
-                                    "text": "Submit Results",
-                                    "emoji": True,
-                                },
-                                "value": "submit_analysis",
-                                "action_id": "submit_analysis",
-                            }
-                        ],
-                    },
                 ],
             },
         )
+
+        if not self.msg_df.empty:
+            view[0]["blocks"].extend(vis_blocks)
+        else:
+            view[0]["blocks"].extend(error_blocks)
 
         return view[0]
