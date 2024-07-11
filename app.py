@@ -294,6 +294,10 @@ def handle_questionnaire_submission(ack, body, context):
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
 
     # add lsm results to the database
+    ts = datetime.datetime.now()
+    print(
+        f"Submitting analysis values: {team_size, team_duration, collab_type, industry, task_type, ts, len(slack_data.analysis_users_consented)}"
+    )
     add_analysis_db(
         context.team_id,
         team_size,
@@ -301,17 +305,14 @@ def handle_questionnaire_submission(ack, body, context):
         collab_type,
         industry,
         task_type,
-        datetime.datetime.now(),
+        ts,
         len(slack_data.analysis_users_consented),
         "lsm",
-        slack_data.lsm_df.to_json,
+        slack_data.lsm_df.to_json(orient="records"),
     )
 
     # delete the analysis-specific data to free memory
     slack_data.clear_analysis_data()
-    print(
-        f"Questionnaire submitted! Values: {team_size, team_duration, collab_type, industry, task_type, task_type_other}"
-    )
 
 
 # delete user data when uninstall occurs

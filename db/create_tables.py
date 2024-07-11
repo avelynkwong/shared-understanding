@@ -56,7 +56,7 @@ TABLES["consent"] = (
     ") ENGINE=InnoDB"
 )
 
-TABLES["lsm_results"] = (
+TABLES["analysis_results"] = (
     "CREATE TABLE `analysis_results` ("
     "  `team_id` VARCHAR(255),"
     "  `team_size` VARCHAR(255),"
@@ -66,8 +66,8 @@ TABLES["lsm_results"] = (
     "  `task_type` VARCHAR(255),"
     "  `timestamp` DATETIME,"
     "  `n_users_consented` DOUBLE,"
-    "  `method` VARCHAR(255)"
-    "  `result` JSON"
+    "  `method` VARCHAR(255),"
+    "  `result` JSON,"
     "  PRIMARY KEY (`team_id`)"
     ") ENGINE=InnoDB"
 )

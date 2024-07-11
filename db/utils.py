@@ -119,11 +119,11 @@ def add_analysis_db(
     collaboration_type,
     industry,
     task_type,
+    timestamp,
     n_users_consented,
     method,
     result,
 ):
-    ts = datetime.datetime.now()
 
     insert_cmd = "INSERT INTO analysis_results (team_id, team_size, team_duration, collaboration_type, industry, task_type, timestamp, n_users_consented, method, result) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
@@ -141,7 +141,7 @@ def add_analysis_db(
                 collaboration_type,
                 industry,
                 task_type,
-                ts,
+                timestamp,
                 n_users_consented,
                 method,
                 result,
