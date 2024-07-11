@@ -459,7 +459,7 @@ async def slack_interactions(request: Request):
 # generate an image served at a url
 @api.get("/lsm_image")
 @limiter.limit(
-    "6/minute"
+    "10/minute"
 )  # only generate lsm visualizations/computations if rate limit not exceeded
 async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
