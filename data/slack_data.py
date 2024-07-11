@@ -28,6 +28,7 @@ class SlackData:
         )
         self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
+        self.lsm_df = pd.DataFrame()
         self.selected_conversations = []
         self.bot_token = bot_token
         self.all_invited_conversations = {}
@@ -41,6 +42,7 @@ class SlackData:
     def clear_analysis_data(self):
         self.msg_df = pd.DataFrame()
         self.analysis_users_consented = set()
+        self.lsm_df = pd.DataFrame()
 
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
@@ -167,14 +169,14 @@ class SlackData:
     def get_lsm_vis(self):
 
         if not self.msg_df.empty:
-            lsm_df = message_aggregation(self.msg_df)
+            self.lsm_df = message_aggregation(self.msg_df)
             # TODO: add look and remove this hard coded value
-            lsm_df = pd.read_csv("test_agg_w_luke.csv")
+            self.lsm_df = pd.read_csv("test_agg_w_luke.csv")
 
             # get lsm values and generate image
-            lsm_df = LSM_application(lsm_df)
-            lsm_df = group_average(lsm_df)
-            self.lsm_image = per_channel_vis_LSM(lsm_df)
+            self.lsm_df = LSM_application(self.lsm_df)
+            self.lsm_df = group_average(self.lsm_df)
+            self.lsm_image = per_channel_vis_LSM(self.lsm_df)
 
     def generate_homepage_view(self, user_id, bot_token, enterprise_id, team_id):
         vis_blocks = [

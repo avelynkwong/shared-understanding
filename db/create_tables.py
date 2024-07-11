@@ -56,7 +56,7 @@ TABLES["consent"] = (
     ") ENGINE=InnoDB"
 )
 
-TABLES["analysis_results"] = (
+TABLES["lsm_results"] = (
     "CREATE TABLE `analysis_results` ("
     "  `team_id` VARCHAR(255),"
     "  `team_size` VARCHAR(255),"
@@ -66,6 +66,8 @@ TABLES["analysis_results"] = (
     "  `task_type` VARCHAR(255),"
     "  `timestamp` DATETIME,"
     "  `n_users_consented` DOUBLE,"
+    "  `method` VARCHAR(255)"
+    "  `result` JSON"
     "  PRIMARY KEY (`team_id`)"
     ") ENGINE=InnoDB"
 )
@@ -92,12 +94,12 @@ def create_or_reset_table(table_name, table_description):
         print("OK")
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-            print(
-                "Table {} already exists. Dropping and recreating...".format(table_name)
-            )
-            cursor.execute("DROP TABLE {}".format(table_name))
-            cursor.execute(table_description)
-            print("Table {} recreated.".format(table_name))
+            # print(
+            #     "Table {} already exists. Dropping and recreating...".format(table_name)
+            # )
+            # cursor.execute("DROP TABLE {}".format(table_name))
+            # cursor.execute(table_description)
+            # print("Table {} recreated.".format(table_name))
             print("Table already exists")
         else:
             print(err.msg)

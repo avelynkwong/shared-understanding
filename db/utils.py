@@ -112,7 +112,7 @@ def get_consented_users(team_id):
     return consented_users
 
 
-def add_questionnaire_response(
+def add_analysis_db(
     team_id,
     team_size,
     team_duration,
@@ -120,10 +120,12 @@ def add_questionnaire_response(
     industry,
     task_type,
     n_users_consented,
+    method,
+    result,
 ):
     ts = datetime.datetime.now()
 
-    insert_cmd = "INSERT INTO analysis_results (team_id, team_size, team_duration, collaboration_type, industry, task_type, timestamp, n_users_consented) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    insert_cmd = "INSERT INTO analysis_results (team_id, team_size, team_duration, collaboration_type, industry, task_type, timestamp, n_users_consented, method, result) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
     try:
         # connect to db
@@ -141,6 +143,8 @@ def add_questionnaire_response(
                 task_type,
                 ts,
                 n_users_consented,
+                method,
+                result,
             ),
         )
         cnx.commit()

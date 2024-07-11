@@ -24,6 +24,9 @@ from forms.consent_form import generate_consent_form
 # get secrets from AWS
 from get_secrets import get_secret
 
+# for timestamp
+import datetime
+
 load_dotenv()
 slack_secrets = get_secret("slack_app_secrets")
 BOT_SCOPES = os.getenv("BOT_SCOPES")
@@ -289,15 +292,26 @@ def handle_questionnaire_submission(ack, body, context):
     if task_type_other:
         task_type = task_type_other
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
-    # add_questionnaire_response(
-    #     context.team_id, industry, work_type, len(slack_data.analysis_users_consented)
-    # )
+
+    # add lsm results to the database
+    add_analysis_db(
+        context.team_id,
+        team_size,
+        team_duration,
+        collab_type,
+        industry,
+        task_type,
+        datetime.datetime.now(),
+        len(slack_data.analysis_users_consented),
+        "lsm",
+        slack_data.lsm_df.to_json,
+    )
+
     # delete the analysis-specific data to free memory
     slack_data.clear_analysis_data()
     print(
         f"Questionnaire submitted! Values: {team_size, team_duration, collab_type, industry, task_type, task_type_other}"
     )
-    # TODO: submit to SQL database along with analysis results
 
 
 # delete user data when uninstall occurs
@@ -435,7 +449,7 @@ async def slack_events(request: Request):
     return await handler.handle(request)
 
 
-# API endpoint for posting the list of conversations to choose from
+# API endpoint for posting the list osf conversations to choose from
 @api.post("/slack/options")
 async def slack_options(request: Request):
     return await handler.handle(request)
@@ -448,9 +462,8 @@ async def slack_interactions(request: Request):
 
 # generate an image served at a url
 @api.get("/lsm_image")
-@limiter.limit("4/10seconds")
-async def get_image(request: Request, token: str, team_id: str, t: str):
-    print(team_id)
+@limiter.limit("3/10seconds")
+async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
     slack_data.get_lsm_vis()
 

@@ -104,14 +104,14 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
 
     # styling
     plt.style.use("dark_background")
-    plt.rcParams["font.size"] = 20
+    plt.rcParams["font.size"] = 11
 
     # subplot columns
     cols = 1
     # subplot rows
     rows = math.ceil(num_channels / cols)
 
-    fig, axs = plt.subplots(rows, cols, figsize=(20, rows * 10))
+    fig, axs = plt.subplots(rows, cols, figsize=(6, rows * 4))
     axs = axs.flatten()
 
     for i, channel in enumerate(channels):
@@ -127,7 +127,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
                 ax.set_xlabel("Number of Time Intervals")
             ax.set_ylabel("Average Shared Language (0-1)")
             ax.set_title(
-                str(channel_df["channel_name"].iloc[0]), fontsize=20, fontweight="bold"
+                str(channel_df["channel_name"].iloc[0]), fontsize=11, fontweight="bold"
             )
             ax.set_ylim(0, 1.09)
             ax.set_yticks(np.arange(0, 1.1, 0.1))
@@ -180,8 +180,8 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
     for j in range(i + 1, len(axs)):
         fig.delaxes(axs[j])
 
-    plt.tight_layout()
-    plt.subplots_adjust(wspace=0.2, hspace=0.5)
+    plt.tight_layout(w_pad=0.2, h_pad=1)
+    # plt.subplots_adjust(wspace=0.2, hspace=1)
 
     # save plot to buffer
     buf = io.BytesIO()
