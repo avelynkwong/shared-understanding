@@ -176,7 +176,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop generating, please wait and try again later.",
+                    "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop updating, please wait and try again later.",
                 },
             },
             {
