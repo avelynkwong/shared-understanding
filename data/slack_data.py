@@ -57,8 +57,8 @@ class SlackData:
 
     # populate dataframe with messages from all selected channels
     def update_dataframe(self):
-        print("Updating dataframe...")
-        print(f"Range: {self.start_date}, {self.end_date}")
+        # print("Updating dataframe...")
+        # print(f"Range: {self.start_date}, {self.end_date}")
         # clear
         self.msg_df = pd.DataFrame()
 

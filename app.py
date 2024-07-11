@@ -353,7 +353,6 @@ api = FastAPI()
 
 # configure rate limiter, limit by team
 def get_team_id_key(request: Request) -> str:
-    print(f'heree: {request.query_params.get("team_id")}')
     return request.query_params.get("team_id")
 
 
@@ -460,7 +459,7 @@ async def slack_interactions(request: Request):
 # generate an image served at a url
 @api.get("/lsm_image")
 @limiter.limit(
-    "3/10seconds"
+    "6/minute"
 )  # only generate lsm visualizations/computations if rate limit not exceeded
 async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
