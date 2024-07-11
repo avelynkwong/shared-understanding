@@ -166,7 +166,7 @@ class SlackData:
         unix = dt.timestamp()
         return unix
 
-    def get_lsm_vis(self):
+    def create_lsm_vis(self):
 
         if not self.msg_df.empty:
             self.lsm_df = message_aggregation(self.msg_df)
@@ -216,7 +216,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":exclamation: Please select channels and/or a valid date range.",
+                    "text": ":exclamation: Please select channels and/or a valid date range containing messages.",
                 },
             },
         ]
