@@ -103,15 +103,16 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
     num_channels = len(channels)
 
     # styling
+    fontsize = 18
     plt.style.use("dark_background")
-    plt.rcParams["font.size"] = 11
+    plt.rcParams["font.size"] = fontsize
 
     # subplot columns
     cols = 1
     # subplot rows
     rows = math.ceil(num_channels / cols)
 
-    fig, axs = plt.subplots(rows, cols, figsize=(6, rows * 4))
+    fig, axs = plt.subplots(rows, cols, figsize=(15, rows * 6))
     axs = axs.flatten()
 
     for i, channel in enumerate(channels):
@@ -127,7 +128,9 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
                 ax.set_xlabel("Number of Time Intervals")
             ax.set_ylabel("Average Shared Language (0-1)")
             ax.set_title(
-                str(channel_df["channel_name"].iloc[0]), fontsize=11, fontweight="bold"
+                str(channel_df["channel_name"].iloc[0]),
+                fontsize=fontsize,
+                fontweight="bold",
             )
             ax.set_ylim(0, 1.09)
             ax.set_yticks(np.arange(0, 1.1, 0.1))
@@ -138,7 +141,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
                     math.ceil(len(channel_df["timestamp"].unique()) / 10),
                 )
             )
-            ax.tick_params(axis="x", labelrotation=80)
+            ax.tick_params(axis="x", labelrotation=70)
 
             ax.text(
                 0.95,
@@ -163,7 +166,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
                 p(x),
                 color="white",
                 linestyle="--",
-                linewidth=1,
+                linewidth=3,
                 alpha=0.8,
             )
 
@@ -172,6 +175,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
                 channel_df["avg_LSM"],
                 alpha=0.6,
                 edgecolor="none",
+                s=80,
             )
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)

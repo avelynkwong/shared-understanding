@@ -73,6 +73,7 @@ def get_slack_data(app, bot_token, team_id):
 def load_homepage(client, context):
 
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data.clear_analysis_data()
 
     # update homepage
     try:
@@ -445,12 +446,7 @@ async def oauth_redirect(req: Request):
         }
 
 
-@api.post("/slack/events")
-async def slack_events(request: Request):
-    return await handler.handle(request)
-
-
-# API endpoint for posting the list osf conversations to choose from
+# API endpoint for posting the list of conversations to choose from
 @api.post("/slack/options")
 async def slack_options(request: Request):
     return await handler.handle(request)

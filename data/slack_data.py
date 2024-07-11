@@ -38,6 +38,8 @@ class SlackData:
         self.analysis_users_consented = (
             set()
         )  # number of users consented in the current selected conversations/time period
+        self.consent_exclusions = 0  # messages excluded due to lack of consent
+        self.subsampling_exclusions = 0  # messages excluded due to max df size limit
 
     def clear_analysis_data(self):
         self.msg_df = pd.DataFrame()
@@ -61,27 +63,31 @@ class SlackData:
         self.msg_df = pd.DataFrame()
 
         # keep track of total number of message exclusions due to unconsenting users
-        total_exclusions = 0
+        self.consent_exclusions = 0  # reset
         for c in self.selected_conversations:
-            total_exclusions += self.get_channel_messages(c)
+            self.get_channel_messages(c)
         # dfi.export(self.msg_df[:100], "df.png")
         # self.msg_df.to_csv("message_df_raw.csv")
 
         # process the df messages
         if not self.msg_df.empty:
+
+            total_rows = len(self.msg_df)
+
+            # subsample the dataframe if it is too large
+            if total_rows > MAX_DF_SIZE:
+                subsample_rate = max(1, math.ceil(total_rows / MAX_DF_SIZE))
+                self.msg_df = self.msg_df.iloc[::subsample_rate]
+            if len(self.msg_df) > MAX_DF_SIZE:  # trim is still larger than MAX_DF_SIZE
+                self.msg_df = self.msg_df.head(MAX_DF_SIZE)
+            self.subsampling_exclusions = max(0, total_rows - MAX_DF_SIZE)
+
             self.msg_df = general_preprocessing(self.msg_df)
             print("preprocessed df messages")
             # self.msg_df.to_csv("message_df_postprocessed.csv")
 
-        # TODO: display this on the homepage
-        print(
-            f"Total exclusions from this query due to unconsenting users: {total_exclusions}"
-        )
-
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name):
-
-        channel_exclusions = 0
 
         print(f"Getting messages for channel {channel_name}")
         channel_id = self.all_invited_conversations[channel_name]
@@ -95,12 +101,10 @@ class SlackData:
         messages = history["messages"]
         has_more = history["has_more"]
 
-        channel_exclusions += self.add_messages_to_df(
-            messages, channel_name, channel_id
-        )
+        self.add_messages_to_df(messages, channel_name, channel_id)
 
         # paging through time, each page contains maximum 100 messages
-        while has_more and len(self.msg_df.index) < MAX_DF_SIZE:
+        while has_more:
             # page += 1
             prev_ts = messages[-1]["ts"]
             history = self.app.client.conversations_history(
@@ -111,21 +115,10 @@ class SlackData:
             )
             messages = history["messages"]
             has_more = history["has_more"]
-            channel_exclusions += self.add_messages_to_df(
-                messages, channel_name, channel_id
-            )
-
-        if len(self.msg_df.index) > MAX_DF_SIZE:
-            print(
-                f"Attempting to pull more than {MAX_DF_SIZE} Slack messages. Clipping to {MAX_DF_SIZE}..."
-            )
-            self.msg_df = self.msg_df[:MAX_DF_SIZE]
-
-        return channel_exclusions
+            self.add_messages_to_df(messages, channel_name, channel_id)
 
     def add_messages_to_df(self, msg_list, channel_name, channel_id):
         # dict to store each message instance
-        exclusions = 0
         msg_dict = {}
         consented_users = get_consented_users(self.team_id)
         for msg in msg_list:
@@ -157,8 +150,7 @@ class SlackData:
                 subtype != "channel_join" and user_id != None
             ):  # don't count bot users as unconsenting users
                 # print(msg)
-                exclusions += 1
-        return exclusions
+                self.consent_exclusions += 1
 
     def str_timezone_to_unix(self, str_time):
         dt = datetime.datetime.strptime(str_time, "%Y-%m-%d")
@@ -185,6 +177,28 @@ class SlackData:
                 "text": {
                     "type": "mrkdwn",
                     "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop generating, please wait and try again later.",
+                },
+            },
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": "Latent Semantic Mapping",
+                    "emoji": True,
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"_The number of messages excluded due to unconsenting users is: {self.consent_exclusions}_",
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"_The number of messages excluded due to limits on message processing: {self.subsampling_exclusions}_",
                 },
             },
             {
