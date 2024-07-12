@@ -464,10 +464,10 @@ async def slack_interactions(request: Request):
 )  # only generate lsm visualizations/computations if rate limit not exceeded
 async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
-    slack_data.create_lsm_vis()  # updates lsm_image property based on data
+    lsm_image = slack_data.create_lsm_vis()  # updates lsm_image property based on data
 
     # Return the image as a response
-    return Response(content=slack_data.lsm_image.read(), media_type="image/png")
+    return Response(content=lsm_image.read(), media_type="image/png")
 
 
 if __name__ == "__main__":

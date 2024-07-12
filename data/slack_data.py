@@ -33,7 +33,6 @@ class SlackData:
         self.bot_token = bot_token
         self.all_invited_conversations = {}
         self.get_invited_conversations()
-        self.lsm_image = None
         self.team_id = team_id
         self.consented_users = []
         self.analysis_users_consented = (
@@ -182,7 +181,8 @@ class SlackData:
             # get lsm values and generate image
             self.lsm_df = LSM_application(self.lsm_df)
             self.lsm_df = group_average(self.lsm_df)
-            self.lsm_image = per_channel_vis_LSM(self.lsm_df)
+            lsm_image = per_channel_vis_LSM(self.lsm_df)
+            return lsm_image
 
     def generate_homepage_view(self, user_id, bot_token, enterprise_id, team_id):
         vis_blocks = [
