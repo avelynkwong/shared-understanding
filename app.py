@@ -456,7 +456,8 @@ async def slack_interactions(request: Request):
     return await handler.handle(request)
 
 
-# generate an image served at a url
+# will only be generate lsm visual if df_limit_exceeded is false
+# since the block containing the image is only shown in that case
 @api.get("/lsm_image")
 @limiter.limit(
     "10/minute"

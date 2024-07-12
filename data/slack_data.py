@@ -12,7 +12,7 @@ from nlp_analysis.aggregation import *
 from nlp_analysis.lsm import *
 
 # maximum messages to store in dataframe
-MAX_DF_SIZE = 5000
+MAX_DF_SIZE = 100
 
 # env vars
 load_dotenv()
@@ -35,11 +35,15 @@ class SlackData:
         self.get_invited_conversations()
         self.lsm_image = None
         self.team_id = team_id
+        self.consented_users = []
         self.analysis_users_consented = (
             set()
         )  # number of users consented in the current selected conversations/time period
+
+        # Information to be displayed on homepage
         self.consent_exclusions = 0  # messages excluded due to lack of consent
-        self.subsampling_exclusions = 0  # messages excluded due to max df size limit
+        # self.subsampling_exclusions = 0  # messages excluded due to max df size limit
+        self.exceeded_df_limit = False
 
     def clear_analysis_data(self):
         self.msg_df = pd.DataFrame()
@@ -59,13 +63,19 @@ class SlackData:
     def update_dataframe(self):
         # print("Updating dataframe...")
         # print(f"Range: {self.start_date}, {self.end_date}")
-        # clear
-        self.msg_df = pd.DataFrame()
+
+        # get the updated list of consented users every time there is a dataframe update
+        self.consented_users = get_consented_users(self.team_id)
+        # clear old results
+        self.clear_analysis_data()
 
         # keep track of total number of message exclusions due to unconsenting users
         self.consent_exclusions = 0  # reset
         for c in self.selected_conversations:
             self.get_channel_messages(c)
+            if len(self.msg_df) > MAX_DF_SIZE:
+                self.exceeded_df_limit = True
+                return
         # dfi.export(self.msg_df[:100], "df.png")
         # self.msg_df.to_csv("message_df_raw.csv")
 
@@ -74,16 +84,21 @@ class SlackData:
 
             total_rows = len(self.msg_df)
 
-            # subsample the dataframe if it is too large
+            # show error message if date range contains too many messages
             if total_rows > MAX_DF_SIZE:
-                subsample_rate = max(1, math.ceil(total_rows / MAX_DF_SIZE))
-                self.msg_df = self.msg_df.iloc[::subsample_rate]
-            if len(self.msg_df) > MAX_DF_SIZE:  # trim is still larger than MAX_DF_SIZE
-                self.msg_df = self.msg_df.head(MAX_DF_SIZE)
-            self.subsampling_exclusions = max(0, total_rows - MAX_DF_SIZE)
+                self.exceeded_df_limit = True
 
-            self.msg_df = general_preprocessing(self.msg_df)
-            print("preprocessed df messages")
+            # # subsample the dataframe if it is too large
+            # if total_rows > MAX_DF_SIZE:
+            #     subsample_rate = max(1, math.ceil(total_rows / MAX_DF_SIZE))
+            #     self.msg_df = self.msg_df.iloc[::subsample_rate]
+            # if len(self.msg_df) > MAX_DF_SIZE:  # trim is still larger than MAX_DF_SIZE
+            #     self.msg_df = self.msg_df.head(MAX_DF_SIZE)
+            # self.subsampling_exclusions = max(0, total_rows - MAX_DF_SIZE)
+            else:
+                self.exceeded_df_limit = False
+                self.msg_df = general_preprocessing(self.msg_df)
+                print("preprocessed df messages")
             # self.msg_df.to_csv("message_df_postprocessed.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
@@ -120,11 +135,10 @@ class SlackData:
     def add_messages_to_df(self, msg_list, channel_name, channel_id):
         # dict to store each message instance
         msg_dict = {}
-        consented_users = get_consented_users(self.team_id)
         for msg in msg_list:
             subtype = msg.get("subtype", "*")
             user_id = msg.get("user", None)
-            if subtype != "channel_join" and user_id in consented_users:
+            if subtype != "channel_join" and user_id in self.consented_users:
                 self.analysis_users_consented.add(user_id)
                 ts = datetime.datetime.fromtimestamp(
                     float(msg["ts"])
@@ -194,13 +208,13 @@ class SlackData:
                     "text": f"_The number of messages excluded due to unconsenting users is: {self.consent_exclusions}_",
                 },
             },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"_The number of messages excluded due to limits on message processing: {self.subsampling_exclusions}_",
-                },
-            },
+            # {
+            #     "type": "section",
+            #     "text": {
+            #         "type": "mrkdwn",
+            #         "text": f"_The number of messages excluded due to limits on message processing: {self.subsampling_exclusions}_",
+            #     },
+            # },
             {
                 "type": "image",
                 "block_id": "test_data",
@@ -225,12 +239,22 @@ class SlackData:
             },
         ]
 
-        error_blocks = [
+        invalid_selection_block = [
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
                     "text": ":exclamation: Please select channels and/or a valid date range containing messages.",
+                },
+            },
+        ]
+
+        exceed_limit_block = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": ":exclamation: The channels and/or date range you selected exceeds the maximum allowable number of messages for analysis. Please select a smaller date range or fewer number of channels.",
                 },
             },
         ]
@@ -315,9 +339,11 @@ class SlackData:
             },
         )
 
-        if not self.msg_df.empty:
-            view[0]["blocks"].extend(vis_blocks)
+        if self.msg_df.empty:
+            view[0]["blocks"].extend(invalid_selection_block)
+        elif self.exceeded_df_limit:
+            view[0]["blocks"].extend(exceed_limit_block)
         else:
-            view[0]["blocks"].extend(error_blocks)
+            view[0]["blocks"].extend(vis_blocks)
 
         return view[0]
