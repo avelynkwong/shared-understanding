@@ -286,7 +286,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":exclamation: Please select channels and/or a valid date range containing messages.",
+                    "text": ":exclamation: Please select channels and/or a valid date range containing messages. You may need to manually re-select dates if the app homepage has just been opened.",
                 },
             },
         ]
