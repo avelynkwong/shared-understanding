@@ -27,6 +27,10 @@ from get_secrets import get_secret
 # for timestamp
 import datetime
 
+# for rate limit exceeded image
+import matplotlib.pyplot as plt
+import io
+
 load_dotenv()
 slack_secrets = get_secret("slack_app_secrets")
 BOT_SCOPES = os.getenv("BOT_SCOPES")
@@ -74,6 +78,7 @@ def load_homepage(client, context):
 
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
     slack_data.clear_analysis_data()
+    slack_data.reset_dates()
 
     # update homepage
     try:
@@ -358,8 +363,35 @@ def get_team_id_key(request: Request) -> str:
 
 limiter = Limiter(key_func=get_team_id_key)
 api.state.limiter = limiter
-api.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# api.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 api.add_middleware(SlowAPIMiddleware)
+
+
+@api.exception_handler(RateLimitExceeded)
+async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    fig, ax = plt.subplots(figsize=(15, 6))
+    # Remove borders and axis
+    ax.set_frame_on(False)
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+    # Add text in the middle of the plot
+    text = "Rate limit exceeded.\nPlease try again later."
+    plt.text(
+        0.5,
+        0.5,
+        text,
+        horizontalalignment="center",
+        verticalalignment="center",
+        fontsize=20,
+        color="red",
+        transform=ax.transAxes,
+    )
+    # save plot to buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.5)
+    buf.seek(0)
+    plt.close(fig)
+    return Response(content=buf.read(), media_type="image/png")
 
 
 @api.post("/slack/events")

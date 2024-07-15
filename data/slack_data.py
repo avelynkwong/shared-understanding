@@ -12,7 +12,7 @@ from nlp_analysis.aggregation import *
 from nlp_analysis.lsm import *
 
 # maximum messages to store in dataframe
-MAX_DF_SIZE = 100
+MAX_DF_SIZE = 1000000
 
 # env vars
 load_dotenv()
@@ -43,6 +43,12 @@ class SlackData:
         self.consent_exclusions = 0  # messages excluded due to lack of consent
         # self.subsampling_exclusions = 0  # messages excluded due to max df size limit
         self.exceeded_df_limit = False
+
+    def reset_dates(self):
+        self.start_date = str(
+            (datetime.datetime.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
+        )
+        self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
 
     def clear_analysis_data(self):
         self.msg_df = pd.DataFrame()
@@ -82,6 +88,7 @@ class SlackData:
         if not self.msg_df.empty:
 
             total_rows = len(self.msg_df)
+            print(f"Length of df before aggregation {total_rows}")
 
             # show error message if date range contains too many messages
             if total_rows > MAX_DF_SIZE:
@@ -98,7 +105,7 @@ class SlackData:
                 self.exceeded_df_limit = False
                 self.msg_df = general_preprocessing(self.msg_df)
                 print("preprocessed df messages")
-            # self.msg_df.to_csv("message_df_postprocessed.csv")
+            self.msg_df.to_csv("message_df_postprocessed.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name):
@@ -131,10 +138,36 @@ class SlackData:
             has_more = history["has_more"]
             self.add_messages_to_df(messages, channel_name, channel_id)
 
+    def add_replies_to_df(self, replies, channel_name, channel_id):
+        for reply in replies[1:]:  # exclude original message
+            reply_dict = {}
+            print(reply)
+            user_id = reply.get("user", None)
+            if user_id in self.consented_users and "reply_count" not in reply:
+                self.analysis_users_consented.add(user_id)
+                ts = datetime.datetime.fromtimestamp(float(reply["ts"]))
+                year = ts.year
+                reply_dict["year"] = year
+                reply_dict["channel_id"] = channel_id
+                reply_dict["channel_name"] = channel_name
+                reply_dict["user_id"] = user_id
+                reply_dict["timestamp"] = ts
+                reply_dict["text"] = str(reply["text"])
+                reply_dict["replies_cnt"] = 0
+                reacts = reply.get("reactions", None)
+                reacts_cnt = 0
+                if reacts:
+                    for react in reacts:
+                        reacts_cnt += react["count"]
+                reply_dict["reacts_cnt"] = reacts_cnt
+                self.msg_df = pd.concat(
+                    [self.msg_df, pd.DataFrame([reply_dict])], ignore_index=True
+                )
+
     def add_messages_to_df(self, msg_list, channel_name, channel_id):
-        # dict to store each message instance
-        msg_dict = {}
         for msg in msg_list:
+            # dict to store each message instance
+            msg_dict = {}
             subtype = msg.get("subtype", "*")
             user_id = msg.get("user", None)
             if subtype != "channel_join" and user_id in self.consented_users:
@@ -146,7 +179,7 @@ class SlackData:
                 msg_dict["year"] = year
                 msg_dict["channel_id"] = channel_id
                 msg_dict["channel_name"] = channel_name
-                msg_dict["user_id"] = msg.get("user", None)
+                msg_dict["user_id"] = user_id
                 msg_dict["timestamp"] = ts
                 msg_dict["text"] = str(msg["text"])
                 msg_dict["replies_cnt"] = msg.get("reply_count", 0)
@@ -159,6 +192,14 @@ class SlackData:
                 self.msg_df = pd.concat(
                     [self.msg_df, pd.DataFrame([msg_dict])], ignore_index=True
                 )
+
+                # add replies to the dataframe
+                if "thread_ts" in msg:
+                    replies = self.app.client.conversations_replies(
+                        token=self.bot_token, channel=channel_id, ts=msg["thread_ts"]
+                    )["messages"]
+                    self.add_replies_to_df(replies, channel_name, channel_id)
+
             elif (
                 subtype != "channel_join" and user_id != None
             ):  # don't count bot users as unconsenting users
@@ -175,6 +216,7 @@ class SlackData:
 
         if not self.msg_df.empty:
             self.lsm_df = message_aggregation(self.msg_df)
+            print(f"length of df after message aggregation: {len(self.lsm_df)}")
             # TODO: add look and remove this hard coded value
             self.lsm_df = pd.read_csv("test_agg_w_luke.csv")
 
@@ -186,13 +228,13 @@ class SlackData:
 
     def generate_homepage_view(self, user_id, bot_token, enterprise_id, team_id):
         vis_blocks = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop updating, please wait and try again later.",
-                },
-            },
+            # {
+            #     "type": "section",
+            #     "text": {
+            #         "type": "mrkdwn",
+            #         "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop updating, please wait and try again later.",
+            #     },
+            # },
             {
                 "type": "header",
                 "text": {
