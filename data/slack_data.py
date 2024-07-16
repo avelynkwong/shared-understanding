@@ -65,7 +65,14 @@ class SlackData:
         return
 
     # populate dataframe with messages from all selected channels
-    def update_dataframe(self):
+    def update_dataframe(self, user_id):
+        # publish loading view
+        self.app.client.views_publish(
+            token=self.bot_token,
+            user_id=user_id,
+            view=self.generate_homepage_view(user_id, self.team_id, loading=True),
+        )
+
         # print("Updating dataframe...")
         # print(f"Range: {self.start_date}, {self.end_date}")
 
@@ -229,58 +236,25 @@ class SlackData:
             lsm_image = per_channel_vis_LSM(self.lsm_df)
             return lsm_image
 
-    def generate_homepage_view(self, user_id, bot_token, enterprise_id, team_id):
-        vis_blocks = [
-            # {
-            #     "type": "section",
-            #     "text": {
-            #         "type": "mrkdwn",
-            #         "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop updating, please wait and try again later.",
-            #     },
-            # },
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": "Latent Semantic Mapping",
-                    "emoji": True,
-                },
-            },
+    def generate_homepage_view(self, bot_token, team_id, loading=False, error=False):
+
+        loading_block = [
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"_The number of messages excluded due to unconsenting users is: {self.consent_exclusions}_",
+                    "text": ":hourglass_flowing_sand: Generating visualizations...",
                 },
             },
-            # {
-            #     "type": "section",
-            #     "text": {
-            #         "type": "mrkdwn",
-            #         "text": f"_The number of messages excluded due to limits on message processing: {self.subsampling_exclusions}_",
-            #     },
-            # },
+        ]
+
+        error_block = [
             {
-                "type": "image",
-                "block_id": "test_data",
-                "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
-                "alt_text": "Knowledge Convergence Graph",
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Submit Results",
-                            "emoji": True,
-                        },
-                        "value": "submit_analysis",
-                        "action_id": "submit_analysis",
-                    }
-                ],
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": ":exclamation: There was an error with visualization generation.",
+                },
             },
         ]
 
@@ -304,91 +278,139 @@ class SlackData:
             },
         ]
 
-        view = (
-            {
-                "type": "home",
-                "callback_id": "home_view",
-                # body of the view
-                "blocks": [
-                    {
-                        "type": "header",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Welcome to Shared Understanding Homepage",
-                            "emoji": True,
-                        },
+        view = {
+            "type": "home",
+            "callback_id": "home_view",
+            # body of the view
+            "blocks": [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Welcome to Shared Understanding Homepage",
+                        "emoji": True,
                     },
-                    {"type": "divider"},
-                    {
-                        "type": "section",
-                        "block_id": "conversation_select",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"To get started, add this Slack application to one or more public channels and select the conversation(s) you would like to analyze. A maximum of {MAX_DF_SIZE} Slack messsages can be analyzed at once.",
+                },
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "block_id": "conversation_select",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"To get started, add this Slack application to one or more public channels and select the conversation(s) you would like to analyze. A maximum of {MAX_DF_SIZE} Slack messsages can be analyzed at once.",
+                    },
+                    "accessory": {
+                        "action_id": "select_conversations",
+                        "type": "multi_external_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Select items",
                         },
-                        "accessory": {
-                            "action_id": "select_conversations",
-                            "type": "multi_external_select",
+                        "min_query_length": 1,
+                    },
+                },
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Please select the start and end dates.",
+                        "emoji": True,
+                    },
+                },
+                {
+                    "type": "actions",
+                    "block_id": "datepicker",
+                    "elements": [
+                        {
+                            "type": "datepicker",
+                            "initial_date": self.start_date,
                             "placeholder": {
                                 "type": "plain_text",
-                                "text": "Select items",
+                                "text": "Select a date",
+                                "emoji": True,
                             },
-                            "min_query_length": 1,
+                            "action_id": "startdate_picked",
                         },
-                    },
-                    {"type": "divider"},
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Please select the start and end dates.",
-                            "emoji": True,
-                        },
-                    },
-                    {
-                        "type": "actions",
-                        "block_id": "datepicker",
-                        "elements": [
-                            {
-                                "type": "datepicker",
-                                "initial_date": self.start_date,
-                                "placeholder": {
-                                    "type": "plain_text",
-                                    "text": "Select a date",
-                                    "emoji": True,
-                                },
-                                "action_id": "startdate_picked",
+                        {
+                            "type": "datepicker",
+                            "initial_date": self.end_date,
+                            "placeholder": {
+                                "type": "plain_text",
+                                "text": "Select a date",
+                                "emoji": True,
                             },
-                            {
-                                "type": "datepicker",
-                                "initial_date": self.end_date,
-                                "placeholder": {
-                                    "type": "plain_text",
-                                    "text": "Select a date",
-                                    "emoji": True,
-                                },
-                                "action_id": "enddate_picked",
-                            },
-                        ],
-                    },
-                    {
-                        "type": "header",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Shared Knowledge Visualizations",
-                            "emoji": True,
+                            "action_id": "enddate_picked",
                         },
+                    ],
+                },
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Shared Knowledge Visualizations",
+                        "emoji": True,
                     },
-                    {"type": "divider"},
-                ],
-            },
-        )
+                },
+                {"type": "divider"},
+            ],
+        }
 
         if self.msg_df.empty:
-            view[0]["blocks"].extend(invalid_selection_block)
+            view["blocks"].extend(invalid_selection_block)
         elif self.exceeded_df_limit:
-            view[0]["blocks"].extend(exceed_limit_block)
+            view["blocks"].extend(exceed_limit_block)
+        elif loading:
+            view["blocks"].extend(loading_block)
+        elif error:
+            view["blocks"].extend(error_block)
         else:
-            view[0]["blocks"].extend(vis_blocks)
+            vis_blocks = [
+                # {
+                #     "type": "section",
+                #     "text": {
+                #         "type": "mrkdwn",
+                #         "text": "Note that the generation of the following visualizations are rate-limited. If visualizations stop updating, please wait and try again later.",
+                #     },
+                # },
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Latent Semantic Mapping",
+                        "emoji": True,
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"_The number of messages excluded due to unconsenting users is: {self.consent_exclusions}_",
+                    },
+                },
+                {
+                    "type": "image",
+                    "block_id": "test_data",
+                    "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                    "alt_text": "Knowledge Convergence Graph",
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "Submit Results",
+                                "emoji": True,
+                            },
+                            "value": "submit_analysis",
+                            "action_id": "submit_analysis",
+                        }
+                    ],
+                },
+            ]
+            view["blocks"].extend(vis_blocks)
 
-        return view[0]
+        return view

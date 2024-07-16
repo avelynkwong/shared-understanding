@@ -86,14 +86,20 @@ def load_homepage(client, context):
             user_id=context.user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.user_id,
                 context.bot_token,
-                context.enterprise_id,
                 context.team_id,
             ),
         )
     except Exception as e:
-        print(f"Error publishing home tab: {e}")
+        client.views_publish(
+            token=context.bot_token,
+            # the user that opened your app's app home
+            user_id=context.user_id,
+            # the view object that appears in the app home
+            view=slack_data.generate_homepage_view(
+                context.bot_token, context.team_id, error=True
+            ),
+        )
 
 
 # when slack app joins a channel, send consent form to members in that channel if they haven't received it yet
@@ -172,21 +178,27 @@ def set_start_date(ack, body, context, logger):
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
     slack_data.start_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
-    slack_data.update_dataframe()
+    slack_data.update_dataframe(context.user_id)
     # update homepage
     try:
         app.client.views_publish(
             token=context.bot_token,
             user_id=body["user"]["id"],
             view=slack_data.generate_homepage_view(
-                context.user_id,
                 context.bot_token,
-                context.enterprise_id,
                 context.team_id,
             ),
         )
     except Exception as e:
-        logger.error(f"Error publishing home tab: {e}")
+        app.client.views_publish(
+            token=context.bot_token,
+            # the user that opened your app's app home
+            user_id=context.user_id,
+            # the view object that appears in the app home
+            view=slack_data.generate_homepage_view(
+                context.bot_token, context.team_id, error=True
+            ),
+        )
 
 
 # update the end date
@@ -196,21 +208,27 @@ def set_end_date(ack, body, context, logger):
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
     slack_data.end_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
-    slack_data.update_dataframe()
+    slack_data.update_dataframe(context.user_id)
     # update homepage
     try:
         app.client.views_publish(
             token=context.bot_token,
             user_id=context.user_id,
             view=slack_data.generate_homepage_view(
-                context.user_id,
                 context.bot_token,
-                context.enterprise_id,
                 context.team_id,
             ),
         )
     except Exception as e:
-        logger.error(f"Error publishing home tab: {e}")
+        app.client.views_publish(
+            token=context.bot_token,
+            # the user that opened your app's app home
+            user_id=context.user_id,
+            # the view object that appears in the app home
+            view=slack_data.generate_homepage_view(
+                context.bot_token, context.team_id, error=True
+            ),
+        )
 
 
 # determine the list of conversations that the slack app has access to
@@ -235,16 +253,14 @@ def select_conversations(ack, body, context, logger):
     selected_conv_names = [c["value"] for c in selected_convs]
     slack_data.selected_conversations = selected_conv_names
     # update homescreen with selected conversations' analysis
-    slack_data.update_dataframe()
+    slack_data.update_dataframe(context.user_id)
     # update homepage
     try:
         app.client.views_publish(
             token=context.bot_token,
             user_id=context.user_id,
             view=slack_data.generate_homepage_view(
-                context.user_id,
                 context.bot_token,
-                context.enterprise_id,
                 context.team_id,
             ),
         )
