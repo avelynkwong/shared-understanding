@@ -24,7 +24,7 @@ class SlackData:
     def __init__(self, app, bot_token, team_id) -> None:
         self.app = app
         self.start_date = str(
-            (datetime.datetime.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
+            (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         )
         self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
@@ -115,8 +115,8 @@ class SlackData:
         history = self.app.client.conversations_history(
             token=self.bot_token,
             channel=channel_id,
-            oldest=self.str_timezone_to_unix(self.start_date),
-            latest=self.str_timezone_to_unix(self.end_date),
+            oldest=self.str_datetime_to_unix(self.start_date),
+            latest=self.str_datetime_to_unix(self.end_date, end=True),
             inclusive=True,
         )
         messages = history["messages"]
@@ -131,7 +131,7 @@ class SlackData:
             history = self.app.client.conversations_history(
                 token=self.bot_token,
                 channel=channel_id,
-                oldest=self.str_timezone_to_unix(self.start_date),
+                oldest=self.str_datetime_to_unix(self.start_date),
                 latest=prev_ts,
             )
             messages = history["messages"]
@@ -141,7 +141,6 @@ class SlackData:
     def add_replies_to_df(self, replies, channel_name, channel_id):
         for reply in replies[1:]:  # exclude original message
             reply_dict = {}
-            print(reply)
             user_id = reply.get("user", None)
             if user_id in self.consented_users and "reply_count" not in reply:
                 self.analysis_users_consented.add(user_id)
@@ -206,8 +205,10 @@ class SlackData:
                 # print(msg)
                 self.consent_exclusions += 1
 
-    def str_timezone_to_unix(self, str_time):
+    def str_datetime_to_unix(self, str_time, end=False):
         dt = datetime.datetime.strptime(str_time, "%Y-%m-%d")
+        if end:
+            dt = dt + datetime.timedelta(hours=23, minutes=59, seconds=59)  # EOD
         # unix time
         unix = dt.timestamp()
         return unix
@@ -223,6 +224,8 @@ class SlackData:
             # get lsm values and generate image
             self.lsm_df = LSM_application(self.lsm_df)
             self.lsm_df = group_average(self.lsm_df)
+            self.lsm_df.to_csv("what.csv")
+            self.lsm_df = moving_avg(self.lsm_df)
             lsm_image = per_channel_vis_LSM(self.lsm_df)
             return lsm_image
 

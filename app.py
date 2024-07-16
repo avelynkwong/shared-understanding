@@ -10,8 +10,6 @@ from starlette.responses import RedirectResponse
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 
 # oauth imports
-from slack_sdk.oauth.installation_store import FileInstallationStore, Installation
-from slack_sdk.oauth.state_store import FileOAuthStateStore
 from oauth.custom_installation_store import CustomFileInstallationStore
 from oauth.custom_state_store import CustomFileOAuthStateStore
 

@@ -98,6 +98,26 @@ def group_average(df_result):
     return avg_lsm
 
 
+def moving_avg(group_avg, window_size=5):
+    group_moving_avg = []
+    for channel_id in group_avg["channel_id"].unique():
+        channel_df = group_avg[group_avg["channel_id"] == channel_id]
+        for i in range(len(channel_df) - window_size - 1):
+            window = channel_df.iloc[i : i + window_size]
+            moving_avg = window["avg_LSM"].mean()
+            group_moving_avg.append(
+                {
+                    "channel_id": channel_id,
+                    "channel_name": window["channel_name"].iloc[(window_size // 2)],
+                    "timestamp": window["timestamp"].iloc[(window_size // 2)],
+                    "num_users": window["num_users"].mean(),
+                    "avg_LSM": moving_avg,
+                }
+            )
+    group_moving_avg = pd.DataFrame(group_moving_avg)
+    return group_moving_avg
+
+
 def per_channel_vis_LSM(group_avg, agg_type="date"):
     channels = group_avg["channel_id"].unique()
     num_channels = len(channels)
@@ -113,7 +133,10 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
     rows = math.ceil(num_channels / cols)
 
     fig, axs = plt.subplots(rows, cols, figsize=(15, rows * 6))
-    axs = axs.flatten()
+    if not isinstance(axs, np.ndarray):
+        axs = [axs]
+    else:
+        axs = axs.flatten()
 
     for i, channel in enumerate(channels):
         channel_df = group_avg[group_avg["channel_id"] == channel]
@@ -157,26 +180,35 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
             )
 
             # polynomial fitting?
-            x = [i for i in range(len(channel_df["timestamp"]))]
-            y = list(channel_df["avg_LSM"])
-            z = np.polyfit(x, y, 4)
-            p = np.poly1d(z)
+            # x = [i for i in range(len(channel_df["timestamp"]))]
+            # y = list(channel_df["avg_LSM"])
+            # z = np.polyfit(x, y, 4)
+            # p = np.poly1d(z)
+            # ax.plot(
+            #     channel_df["timestamp"],
+            #     p(x),
+            #     color="white",
+            #     linestyle="--",
+            #     linewidth=3,
+            #     alpha=0.8,
+            # )
+            # ax.scatter(
+            #     channel_df["timestamp"],
+            #     channel_df["avg_LSM"],
+            #     alpha=0.6,
+            #     edgecolor="none",
+            #     s=80,
+            # )
+
+            # moving average
             ax.plot(
                 channel_df["timestamp"],
-                p(x),
-                color="white",
+                channel_df["avg_LSM"],
                 linestyle="--",
                 linewidth=3,
                 alpha=0.8,
             )
 
-            ax.scatter(
-                channel_df["timestamp"],
-                channel_df["avg_LSM"],
-                alpha=0.6,
-                edgecolor="none",
-                s=80,
-            )
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
 
