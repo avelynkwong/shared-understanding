@@ -89,13 +89,13 @@ class SlackData:
                 self.exceeded_df_limit = True
                 return
         # dfi.export(self.msg_df[:100], "df.png")
-        # self.msg_df.to_csv("message_df_raw.csv")
+        self.msg_df.to_csv("message_df_raw.csv")
 
         # process the df messages
         if not self.msg_df.empty:
 
             total_rows = len(self.msg_df)
-            print(f"Length of df before aggregation {total_rows}")
+            print(f"Length of raw df {total_rows}")
 
             # show error message if date range contains too many messages
             if total_rows > MAX_DF_SIZE:
@@ -112,6 +112,11 @@ class SlackData:
                 self.exceeded_df_limit = False
                 self.msg_df = general_preprocessing(self.msg_df)
                 print("preprocessed df messages")
+                # aggregate the messages based on date
+                self.msg_df = message_aggregation(self.msg_df)
+                print(
+                    f"length of df after message processing and aggregation: {len(self.msg_df)}"
+                )
             self.msg_df.to_csv("message_df_postprocessed.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
@@ -223,13 +228,11 @@ class SlackData:
     def create_lsm_vis(self):
 
         if not self.msg_df.empty:
-            self.lsm_df = message_aggregation(self.msg_df)
-            print(f"length of df after message aggregation: {len(self.lsm_df)}")
             # TODO: add look and remove this hard coded value
-            self.lsm_df = pd.read_csv("test_agg_w_luke.csv")
+            self.msg_df = pd.read_csv("test_agg_w_luke.csv")
 
             # get lsm values and generate image
-            self.lsm_df = LSM_application(self.lsm_df)
+            self.lsm_df = LSM_application(self.msg_df)
             self.lsm_df = group_average(self.lsm_df)
             self.lsm_df.to_csv("what.csv")
             self.lsm_df = moving_avg(self.lsm_df)

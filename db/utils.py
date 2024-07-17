@@ -13,15 +13,15 @@ config = {
 }
 
 
-def add_user_consent(team_id, user_id):
-    insert_cmd = "INSERT INTO consent (team_id, user_id) VALUES (%s, %s)"
+def add_user_consent(team_id, user_id, tz):
+    insert_cmd = "INSERT INTO consent (team_id, user_id, timezone) VALUES (%s, %s, %s)"
 
     try:
         # connect to db
         cnx = mysql.connector.connect(**config)
         cursor = cnx.cursor()
         # execute insert cmd
-        cursor.execute(insert_cmd, (team_id, user_id))
+        cursor.execute(insert_cmd, (team_id, user_id, tz))
         cnx.commit()
         print(f"Consent recorded in DB for user {user_id}.")
 

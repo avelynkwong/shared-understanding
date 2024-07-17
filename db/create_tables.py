@@ -52,6 +52,7 @@ TABLES["consent"] = (
     "CREATE TABLE `consent` ("
     "  `team_id` VARCHAR(255),"
     "  `user_id` VARCHAR(255),"
+    "  `timezone` VARCHAR(255),"
     "  PRIMARY KEY (`user_id`)"
     ") ENGINE=InnoDB"
 )

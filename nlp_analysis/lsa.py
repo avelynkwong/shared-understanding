@@ -1,44 +1,30 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from nltk.corpus import wordnet as wn
-import nltk
 from nltk.corpus import stopwords
-import mysql.connector
-import string
-import os
-import datetime
 import numpy as np
-import json
-import re
-import enchant
-import spacy
-import math
-import time
-import matplotlib.dates as mdates
-import os.path
 from gensim import corpora
 from gensim.models import LsiModel, LogEntropyModel
 from nltk.tokenize import RegexpTokenizer
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 from gensim.models.coherencemodel import CoherenceModel
-from gensim.corpora import Dictionary
 from gensim import matutils
-from sklearn.preprocessing import MinMaxScaler
 from scipy.spatial.distance import cosine
 from aggregation import message_aggregation
+import numpy as np
+
 
 def token_stem_stop(docs):
     # initialize regex tokenizer
-    tokenizer = RegexpTokenizer(r'\w+')
+    tokenizer = RegexpTokenizer(r"\w+")
     # create English stop words list
-    en_stop = set(stopwords.words('english'))
+    en_stop = set(stopwords.words("english"))
     # Create p_stemmer of class PorterStemmer
     p_stemmer = PorterStemmer()
     # list for tokenized documents in loop
     texts = []
     # loop through document list
-    doc_set = docs.tolist() 
+    doc_set = docs.tolist()
     for i in doc_set:
         # clean and tokenize document string
         raw = i.lower()
@@ -51,6 +37,7 @@ def token_stem_stop(docs):
         texts.append(stemmed_tokens)
     return texts
 
+
 def prepare_corpus(processed_docs):
     """
     Input  : clean document
@@ -60,7 +47,9 @@ def prepare_corpus(processed_docs):
     # Creating the term dictionary of our courpus, where every unique term is assigned an index. dictionary = corpora.Dictionary(doc_clean)
     dictionary = corpora.Dictionary(processed_docs)
     # Converting list of documents (corpus) into Document Term Matrix using dictionary prepared above.
-    doc_term_matrix = [dictionary.doc2bow(doc) for doc in processed_docs] #doc2bow function returns tuples of type (word id, frequency)
+    doc_term_matrix = [
+        dictionary.doc2bow(doc) for doc in processed_docs
+    ]  # doc2bow function returns tuples of type (word id, frequency)
     # generate LDA model
     return dictionary, doc_term_matrix
 
@@ -111,7 +100,7 @@ def apply_transformation(doc, dictionary, logent_transformation):
     return logent_transformation[normalized_bow]
 
 
-def build_model(matrix, dictionary, df_processed, stop_div, step):
+def build_model(matrix, dictionary, df_processed, topic_proportion, step):
 
     # log entropy transformation
     logent_transformation = LogEntropyModel(matrix, dictionary)
@@ -127,154 +116,159 @@ def build_model(matrix, dictionary, df_processed, stop_div, step):
         filtered_dictionary,
         filtered_corpus,
         df_processed,
-        stop=len(df_processed) // stop_div,
+        stop=len(df_processed) // topic_proportion,
         step=step,
     )
-    return best_model, logent_transformation, logent_corpus
+    return best_model, logent_transformation
 
-def memory_coherence(df, best_model, logent_transformation, dictionary): 
-    list_output = [] 
-    for channel in df['channel_id'].unique():
-        for time in  df['timestamp'].unique():
-            
-            filtered_df = df[(df['channel_id']==channel) & (df['timestamp'] == time)]
-            if len(filtered_df)==0:
-                continue
-    
-            for i, row in filtered_df.iterrows(): 
-                document_distribution = best_model[logent_transformation[(dictionary.doc2bow(row['processed_for_LSA']))]]
-                print(document_distribution)
-            
-                list_output.append({
-                    'channel': channel,
-                    'channel_name': filtered_df['channel_name'].iloc[0],
-                    'timestamp': time,
-                    'num_users': len(filtered_df['id_user'].unique()),
-                    'user': row['id_user'],
-                    'matrix': document_distribution
-                })
 
-    df_output = pd.DataFrame(list_output)
+def get_matrix_centroid(matrix, num_topics):
+    # create numpy array, rows = number of documents, cols = number of topics
+    array = np.zeros((len(matrix), num_topics))
 
-    #calculate the final group centroid
-    total_matrix = [item for sublist in df_output['matrix'] for item in sublist]
-    print(total_matrix)
-    if len(total_matrix) >0:
-        if type(total_matrix[0]) is tuple:
-            total_matrix = [total_matrix]total_df = matrix_to_df(total_matrix)
-    print(total_df)
-    group_total_centroid = total_df.mean(axis=1)
+    for doc_idx, doc_dist in enumerate(matrix):
+        for topic_idx, topic_weight in doc_dist:
+            array[doc_idx][topic_idx] = topic_weight
 
-    #now go through and calculate the running coherence 
-    list_output2 = []
+    # average along the topic dimension
+    centroid = np.mean(array, axis=0)
+    return centroid
 
-    for channel in df_output['channel'].unique():
-        #print(channel)
-        for time in  df_output['timestamp'].unique():
-            #print(time)
 
-            #calculate group coherence 
-            df_filtered = df_output[(df_output['channel']==channel) & (df['timestamp'] <= time)]
+def memory_coherence(df, best_model, logent_transformation, dictionary):
+    # option with memory
+    LSA_topic_dists = []
 
-            #print(len(df_filtered))
-
-            if len(df_filtered)==0:
-                print("empty df v2")
+    for channel_id in df["channel_id"].unique():
+        for time in df["timestamp"].unique():
+            filtered_df = df[
+                (df["channel_id"] == channel_id) & (df["timestamp"] == time)
+            ]
+            if len(filtered_df) == 0:
                 continue
 
-            num_users = len(df_filtered['user'].unique())
-            num_user_list = [num_users]*(num_users+1)
+            # for each document in a channel, get the distribution across all topics
+            for i, row in filtered_df.iterrows():
+                doc_topic_dist = best_model[
+                    logent_transformation[
+                        (dictionary.doc2bow(row["processed_for_LSA"]))
+                    ]
+                ]
+                LSA_topic_dists.append(
+                    {
+                        "channel_id": channel_id,
+                        "channel_name": filtered_df["channel_name"].iloc[0],
+                        "timestamp": time,
+                        "num_users": len(filtered_df["user_id"].unique()),
+                        "user": row["user_id"],
+                        "matrix": doc_topic_dist,
+                    }
+                )
 
-            channel_list = [channel]*(num_users+1)
-            time_list = [time]*(num_users+1)
-            channel_name_list = [df_filtered['channel_name'].iloc[0]]*(num_users+1)
-            #print(df_filtered['matrix'])
-            #append all the matrixes together
-            channel_time_matrix = [item for sublist in df_filtered['matrix'] for item in sublist]
-            #print(channel_time_matrix)
-            if len(channel_time_matrix) >0:
-                if type(channel_time_matrix[0]) is tuple:
-                    channel_time_matrix = [channel_time_matrix]
-            #print(channel_time_matrix)
-            #if channel_time_matrix[0, 0] == 0
-            channel_time_df = matrix_to_df(channel_time_matrix)
-            group_centroid = channel_time_df.mean(axis=1)
-            group_centroid_distance = cosine(group_centroid, group_total_centroid)
+    LSA_topic_dists = pd.DataFrame(LSA_topic_dists)
 
-            users = []
-            user_dists = []
-            #print("getting into user loop")
-            for user in df_filtered['user'].unique():
-                users.append(user)
-                df_filtered_user = df_filtered[df_filtered['user']==user]
-                channel_time_user_matrix = [item for sublist in df_filtered_user['matrix'] for item in sublist]
-                #print(channel_time_user_matrix)
-                if len(channel_time_user_matrix) >0:
-                    if type(channel_time_user_matrix[0]) is tuple:
-                        channel_time_user_matrix = [channel_time_user_matrix]
+    # calculate the running average centroids and compute cosine similarities with final group centroid
+    cosine_similarities = []
+    for channel_id in LSA_topic_dists["channel_id"].unique():
+        df_channel = LSA_topic_dists[LSA_topic_dists["channel_id"] == channel_id]
+        channel_name = df_channel["channel_name"].iloc[0]
+        # calculate the final centroid for this channel
+        channel_matrix = [item for sublist in df_channel["matrix"] for item in sublist]
+        # if type(total_matrix[0] is tuple):
+        #     total_matrix = [total_matrix]
+        final_channel_centroid = get_matrix_centroid(
+            channel_matrix, best_model.num_topics
+        )
+        print(final_channel_centroid)
 
-                channel_time_user_df = matrix_to_df(channel_time_user_matrix)
-                user_cent = channel_time_user_df.mean(axis=1)
-                user_distance = cosine(user_cent, group_total_centroid)
-        
+        # calculating running average centroids for all docs up to different times for each channel
+        for time in df_channel["timestamp"].unique():
+            df_filtered = df_channel[df_channel["timestamp"] <= time]
+            num_users = len(df_filtered["user"].unique())
+            # num_user_list = [num_users] * (num_users + 1)
+            # channel_list = [channel_id] * (num_users + 1)
+            # time_list = [time] * (num_users + 1)
+            # channel_name_list = [df_filtered["channel_name"].iloc[0]] * (num_users + 1)
 
-                user_dists.append(user_distance)
-            users.append("Group")
-            user_normsdistsnd(group_centroid_distance)
-            stdev_list = [np.std(user_dists)]*(num_users+1)
+            # calculate running average centroid for all docs in the channel with a timestamp <= time
+            channel_time_matrix = [
+                item for sublist in df_filtered["matrix"] for item in sublist
+            ]
+            # if type(channel_time_matrix[0]) is tuple:
+            #     channel_time_matrix = [channel_time_matrix]
+            group_centroid = get_matrix_centroid(
+                channel_time_matrix, best_model.num_topics
+            )
+            group_cosine_similarity = 1 - cosine(group_centroid, final_channel_centroid)
+
+            cosine_similarities.append(
+                {
+                    "channel_id": channel_id,
+                    "channel_name": channel_name,
+                    "timestamp": time,
+                    "num_users": num_users,
+                    "user": "group",
+                    "cosine_sim": group_cosine_similarity,
+                }
+            )
+
+            # calculate running average centroid for all docs from a specific user in the channel
+            for user in df_filtered["user"].unique():
+                df_filtered_user = df_filtered[df_filtered["user"] == user]
+                channel_time_user_matrix = [
+                    item for sublist in df_filtered_user["matrix"] for item in sublist
+                ]
+                # if len(channel_time_user_matrix) > 0:
+                #     if type(channel_time_user_matrix[0]) is tuple:
+                #         channel_time_user_matrix = [channel_time_user_matrix]
+                user_centroid = get_matrix_centroid(channel_time_user_matrix)
+                user_cosine_similarity = 1 - cosine(
+                    user_centroid, final_channel_centroid
+                )
+
+                cosine_similarities.append(
+                    {
+                        "channel_id": channel_id,
+                        "channel_name": channel_name,
+                        "timestamp": time,
+                        "num_users": num_users,
+                        "user": user,
+                        "cosine_sim": user_cosine_similarity,
+                    }
+                )
+
+    cosine_similarities = pd.DataFrame(cosine_similarities)
+
+    return cosine_similarities
 
 
-             # Flatten the dictionary
-            for i in range(len(users)):
-                list_output2.append({
-                    'channel': channel_list[i],
-                    'channel_name': channel_name_list[i],
-                    'timestamp': time_list[i],
-                    'num_users': num_user_list[i],
-                    'user': users[i],
-                    'coherence': user_dists[i],
-                    'std': stdev_list[i]
-                })
-
-    df_output2 = pd.DataFrame(list_output2)
-
-    return df_output2
-
-def LSA(preprocessed_df, agg_type, stop_div, step, memory):
+def LSA(df, topic_proportion, step, memory=True):
     """
     Inputs:
-        preprocessed_df: dataframe that has already be preprocessed with general_preprocessing (remove non dict words, etc.)'
+        df: dataframe that has already be preprocessed with general_preprocessing (remove non dict words, etc.) and aggregated
         agg_type: how messages are grouped into documents
-        
-    """
+        topic_proportion: 1/topic_proportion is the maximum number of topics to train for the LSA model
 
-    agg_df = message_aggregation(agg_type, preprocessed_df)
+    """
     # tokenize the messages
-    lsa_processed_docs = token_stem_stop(agg_df['text'])
-    agg_df['processed_for_LSA'] = lsa_processed_docs
+    lsa_processed_docs = token_stem_stop(df["text"])
+    df["processed_for_LSA"] = lsa_processed_docs
     # create dictionary of words and word-document matrix
     dictionary, matrix = prepare_corpus(lsa_processed_docs)
 
-    model_df, logent_transformation, logent_corpus = build_model(matrix, dictionary, df_processed, stop_div, step)
+    best_model, logent_transformation = build_model(
+        matrix, dictionary, lsa_processed_docs, topic_proportion, step
+    )
 
-    max_coherence_index = max(model_df['coherence'])
+    # compute running avg centroids over aggregation groups
+    if memory:
+        LSA_df = memory_coherence(df, best_model, logent_transformation, dictionary)
+        print(LSA_df)
+    # else: # no memory of previous aggregation
+    #     LSA_df = no_memory_coherence(test_output, best_model, logent_transformation, dictionary)
 
-    # Find all indices of the maximum value
-    max_indices = [index for index, value in enumerate(model_df['coherence']) if value == max_coherence_index]
-
-    best_model = model_df['model'].iloc[max_indices[0]]
-    print("best model found")
-
-    if memory ==1:
-        df_output = memory_coherence(test_output, best_model, logent_transformation, dictionary)
-    elif memory ==0: 
-        df_output = no_memory_coherence(test_output, best_model, logent_transformation, dictionary)
-
-    print("coherence computed")
+    # LSA_viz(LSA_df, agg_type)
 
 
-    
-
-    LSA_viz(df_output, agg_type)
-
-
+preprocessed_df = "message_df_raw.csv"
+LSA(preprocessed_df, 2, 2, True)

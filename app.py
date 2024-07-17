@@ -271,7 +271,10 @@ def select_conversations(ack, body, context, logger):
 @app.action("consent_yes")
 def add_consented_users(ack, body, context):
     ack()
-    add_user_consent(context.team_id, body["user"]["id"])
+    user_id = body["user"]["id"]
+    user_info = app.client.users_info(token=context.bot_token, user=user_id)["user"]
+    tz = user_info.get("tz")
+    add_user_consent(context.team_id, user_id, tz)
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
     post_consent_confirmation(context.bot_token, app.client, channel_id, user_name)
