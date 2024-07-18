@@ -10,6 +10,8 @@ import os
 from nlp_analysis.data_preprocessing import *
 from nlp_analysis.aggregation import *
 from nlp_analysis.lsm import *
+from nlp_analysis.lsa import *
+from slack_sdk.errors import SlackApiError
 
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 1000000
@@ -28,7 +30,8 @@ class SlackData:
         )
         self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
-        self.lsm_df = pd.DataFrame()
+        self.lsm_df = pd.DataFrame()  # eventually holds lsm analysis results
+        self.lsa_df = pd.DataFrame()  # eventually holds lsa analysis results
         self.selected_conversations = []
         self.bot_token = bot_token
         self.all_invited_conversations = {}
@@ -54,6 +57,7 @@ class SlackData:
         self.msg_df = pd.DataFrame()
         self.analysis_users_consented = set()
         self.lsm_df = pd.DataFrame()
+        self.lsa_df = pd.DataFrame()
 
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
@@ -72,10 +76,6 @@ class SlackData:
             user_id=user_id,
             view=self.generate_homepage_view(user_id, self.team_id, loading=True),
         )
-
-        # print("Updating dataframe...")
-        # print(f"Range: {self.start_date}, {self.end_date}")
-
         # get the updated list of consented users every time there is a dataframe update
         self.consented_users = get_consented_users(self.team_id)
         # clear old results
@@ -84,11 +84,10 @@ class SlackData:
         # keep track of total number of message exclusions due to unconsenting users
         self.consent_exclusions = 0  # reset
         for c in self.selected_conversations:
-            self.get_channel_messages(c)
+            self.get_channel_messages(c, user_id)
             if len(self.msg_df) > MAX_DF_SIZE:
                 self.exceeded_df_limit = True
                 return
-        # dfi.export(self.msg_df[:100], "df.png")
         self.msg_df.to_csv("message_df_raw.csv")
 
         # process the df messages
@@ -120,35 +119,57 @@ class SlackData:
             self.msg_df.to_csv("message_df_postprocessed.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
-    def get_channel_messages(self, channel_name):
+    def get_channel_messages(self, channel_name, user_id):
 
         print(f"Getting messages for channel {channel_name}")
         channel_id = self.all_invited_conversations[channel_name]
-        history = self.app.client.conversations_history(
-            token=self.bot_token,
-            channel=channel_id,
-            oldest=self.str_datetime_to_unix(self.start_date),
-            latest=self.str_datetime_to_unix(self.end_date, end=True),
-            inclusive=True,
-        )
-        messages = history["messages"]
-        has_more = history["has_more"]
-
-        self.add_messages_to_df(messages, channel_name, channel_id)
-
-        # paging through time, each page contains maximum 100 messages
-        while has_more:
-            # page += 1
-            prev_ts = messages[-1]["ts"]
+        try:
             history = self.app.client.conversations_history(
                 token=self.bot_token,
                 channel=channel_id,
                 oldest=self.str_datetime_to_unix(self.start_date),
-                latest=prev_ts,
+                latest=self.str_datetime_to_unix(self.end_date, end=True),
+                inclusive=True,
             )
             messages = history["messages"]
             has_more = history["has_more"]
-            self.add_messages_to_df(messages, channel_name, channel_id)
+
+            self.add_messages_to_df(messages, channel_name, channel_id, user_id)
+
+            # paging through time, each page contains maximum 100 messages
+            while has_more:
+                # page += 1
+                prev_ts = messages[-1]["ts"]
+                try:
+                    history = self.app.client.conversations_history(
+                        token=self.bot_token,
+                        channel=channel_id,
+                        oldest=self.str_datetime_to_unix(self.start_date),
+                        latest=prev_ts,
+                    )
+                    messages = history["messages"]
+                    has_more = history["has_more"]
+                    self.add_messages_to_df(messages, channel_name, channel_id, user_id)
+                except SlackApiError as e:
+                    if e.response["error"] == "ratelimited":
+                        self.app.client.views_publish(
+                            token=self.bot_token,
+                            user_id=user_id,
+                            view=self.generate_homepage_view(
+                                self.bot_token,
+                                self.team_id,
+                                slackapi_limit_exceeded=True,
+                            ),
+                        )
+        except SlackApiError as e:
+            if e.response["error"] == "ratelimited":
+                self.app.client.views_publish(
+                    token=self.bot_token,
+                    user_id=user_id,
+                    view=self.generate_homepage_view(
+                        self.bot_token, self.team_id, slackapi_limit_exceeded=True
+                    ),
+                )
 
     def add_replies_to_df(self, replies, channel_name, channel_id):
         for reply in replies[1:]:  # exclude original message
@@ -175,7 +196,7 @@ class SlackData:
                     [self.msg_df, pd.DataFrame([reply_dict])], ignore_index=True
                 )
 
-    def add_messages_to_df(self, msg_list, channel_name, channel_id):
+    def add_messages_to_df(self, msg_list, channel_name, channel_id, app_user_id):
         for msg in msg_list:
             # dict to store each message instance
             msg_dict = {}
@@ -206,10 +227,26 @@ class SlackData:
 
                 # add replies to the dataframe
                 if "thread_ts" in msg:
-                    replies = self.app.client.conversations_replies(
-                        token=self.bot_token, channel=channel_id, ts=msg["thread_ts"]
-                    )["messages"]
-                    self.add_replies_to_df(replies, channel_name, channel_id)
+                    # get a maximum of 100 replies
+                    try:
+                        replies = self.app.client.conversations_replies(
+                            token=self.bot_token,
+                            channel=channel_id,
+                            ts=msg["thread_ts"],
+                            limit=100,
+                        )["messages"]
+                        self.add_replies_to_df(replies, channel_name, channel_id)
+                    except SlackApiError as e:
+                        if e.response["error"] == "ratelimited":
+                            self.app.client.views_publish(
+                                token=self.bot_token,
+                                user_id=app_user_id,
+                                view=self.generate_homepage_view(
+                                    self.bot_token,
+                                    self.team_id,
+                                    slackapi_limit_exceeded=True,
+                                ),
+                            )
 
             elif (
                 subtype != "channel_join" and user_id != None
@@ -226,20 +263,38 @@ class SlackData:
         return unix
 
     def create_lsm_vis(self):
+        # TODO: add look and remove the hard coded value to self.msg_df
+        # get lsm values and generate image
+        self.lsm_df = compute_lsm_scores(pd.read_csv("test_agg_w_luke.csv"))
+        self.lsm_df = group_average(self.lsm_df)
+        self.lsm_df = moving_avg(self.lsm_df)
+        lsm_image = per_channel_vis_LSM(self.lsm_df)
+        return lsm_image
 
-        if not self.msg_df.empty:
-            # TODO: add look and remove this hard coded value
-            self.msg_df = pd.read_csv("test_agg_w_luke.csv")
+    def create_lsa_vis(self):
+        self.lsa_df = compute_LSA_analysis(
+            self.msg_df, topic_proportion=20, step=2, memory=True
+        )
+        lsa_image = LSA_cosine_sim_vis(self.lsa_df)
+        return lsa_image
 
-            # get lsm values and generate image
-            self.lsm_df = LSM_application(self.msg_df)
-            self.lsm_df = group_average(self.lsm_df)
-            self.lsm_df.to_csv("what.csv")
-            self.lsm_df = moving_avg(self.lsm_df)
-            lsm_image = per_channel_vis_LSM(self.lsm_df)
-            return lsm_image
-
-    def generate_homepage_view(self, bot_token, team_id, loading=False, error=False):
+    def generate_homepage_view(
+        self,
+        bot_token,
+        team_id,
+        loading=False,
+        vis_error=False,
+        slackapi_limit_exceeded=False,
+    ):
+        slack_limit_exceeded_block = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": ":exclamation: The SlackAPI rate limit has been exceeded. Please try again later with a smaller date range/number of conversations.",
+                },
+            },
+        ]
 
         loading_block = [
             {
@@ -251,12 +306,12 @@ class SlackData:
             },
         ]
 
-        error_block = [
+        vis_error_block = [
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":exclamation: There was an error with visualization generation.",
+                    "text": ":exclamation: There was an error with visualization generation. Try selecting a larger date range.",
                 },
             },
         ]
@@ -271,7 +326,7 @@ class SlackData:
             },
         ]
 
-        exceed_limit_block = [
+        exceed_msg_limit_block = [
             {
                 "type": "section",
                 "text": {
@@ -359,14 +414,16 @@ class SlackData:
             ],
         }
 
-        if self.msg_df.empty:
-            view["blocks"].extend(invalid_selection_block)
-        elif self.exceeded_df_limit:
-            view["blocks"].extend(exceed_limit_block)
+        if self.exceeded_df_limit:
+            view["blocks"].extend(exceed_msg_limit_block)
+        elif vis_error:
+            view["blocks"].extend(vis_error_block)
+        elif slackapi_limit_exceeded:
+            view["blocks"].extend(slack_limit_exceeded_block)
         elif loading:
             view["blocks"].extend(loading_block)
-        elif error:
-            view["blocks"].extend(error_block)
+        elif self.msg_df.empty:
+            view["blocks"].extend(invalid_selection_block)
         else:
             vis_blocks = [
                 # {
@@ -377,6 +434,27 @@ class SlackData:
                 #     },
                 # },
                 {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"_The number of messages excluded due to unconsenting users is: {self.consent_exclusions}_",
+                    },
+                },
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Knowledge Convergence",
+                        "emoji": True,
+                    },
+                },
+                {
+                    "type": "image",
+                    "block_id": "lsa_img",
+                    "image_url": f"{URI}/lsa_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                    "alt_text": "Latent Semantic Analysis Graph",
+                },
+                {
                     "type": "header",
                     "text": {
                         "type": "plain_text",
@@ -385,17 +463,10 @@ class SlackData:
                     },
                 },
                 {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"_The number of messages excluded due to unconsenting users is: {self.consent_exclusions}_",
-                    },
-                },
-                {
                     "type": "image",
-                    "block_id": "test_data",
+                    "block_id": "lsm_img",
                     "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
-                    "alt_text": "Knowledge Convergence Graph",
+                    "alt_text": "Latent Semantic Matching Graph",
                 },
                 {
                     "type": "actions",

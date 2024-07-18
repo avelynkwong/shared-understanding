@@ -6,7 +6,7 @@ import math
 import io
 
 
-def LSM_basic(categories, person_a, person_b):
+def avg_lsm_score(categories, person_a, person_b):
     lsm_per_category = []
     for category in categories:
         C_a = person_a[category].values[0]
@@ -17,7 +17,7 @@ def LSM_basic(categories, person_a, person_b):
     return lsm_overall
 
 
-def LSM_application(df):
+def compute_lsm_scores(df):
     categories = [
         "ppron",
         "ipron",
@@ -52,7 +52,7 @@ def LSM_application(df):
                     & (df["timestamp"] == time)
                     & (df["user_id"] == b)
                 ]
-                result = LSM_basic(categories, person_a, person_b)
+                result = avg_lsm_score(categories, person_a, person_b)
                 lsm_result.append(
                     {
                         "channel_id": channel,
@@ -123,7 +123,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
     num_channels = len(channels)
 
     # styling
-    fontsize = 18
+    fontsize = 20
     plt.style.use("dark_background")
     plt.rcParams["font.size"] = fontsize
 
@@ -132,7 +132,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
     # subplot rows
     rows = math.ceil(num_channels / cols)
 
-    fig, axs = plt.subplots(rows, cols, figsize=(15, rows * 6))
+    fig, axs = plt.subplots(rows, cols, figsize=(20, rows * 7))
     if not isinstance(axs, np.ndarray):
         axs = [axs]
     else:

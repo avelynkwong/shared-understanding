@@ -97,7 +97,7 @@ def load_homepage(client, context):
             user_id=context.user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.bot_token, context.team_id, error=True
+                context.bot_token, context.team_id, vis_error=True
             ),
         )
 
@@ -112,7 +112,9 @@ def send_consent_form(event, client, context):
     # check whether the member who has joined the channel is the slack app
     if joined_user_id == bot_user_id:
 
-        add_user_consent(context.team_id, bot_user_id)  # add bot as a consenting user
+        add_user_consent(
+            context.team_id, bot_user_id, tz=None
+        )  # add bot as a consenting user
 
         channel_id = event["channel"]
         all_channel_users = []
@@ -196,7 +198,7 @@ def set_start_date(ack, body, context, logger):
             user_id=context.user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.bot_token, context.team_id, error=True
+                context.bot_token, context.team_id, vis_error=True
             ),
         )
 
@@ -226,7 +228,7 @@ def set_end_date(ack, body, context, logger):
             user_id=context.user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.bot_token, context.team_id, error=True
+                context.bot_token, context.team_id, vis_error=True
             ),
         )
 
@@ -246,7 +248,7 @@ def list_conversations(ack, context):
 
 # update the selected conversations
 @app.action("select_conversations")
-def select_conversations(ack, body, context, logger):
+def select_conversations(ack, body, context):
     ack()
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
     selected_convs = body["actions"][0]["selected_options"]
@@ -265,7 +267,15 @@ def select_conversations(ack, body, context, logger):
             ),
         )
     except Exception as e:
-        logger.error(f"Error publishing home tab: {e}")
+        app.client.views_publish(
+            token=context.bot_token,
+            # the user that opened your app's app home
+            user_id=context.user_id,
+            # the view object that appears in the app home
+            view=slack_data.generate_homepage_view(
+                context.bot_token, context.team_id, vis_error=True
+            ),
+        )
 
 
 @app.action("consent_yes")
@@ -316,11 +326,12 @@ def handle_questionnaire_submission(ack, body, context):
         task_type = task_type_other
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
 
-    # add lsm results to the database
+    # submit analysis results
     ts = datetime.datetime.now()
     print(
         f"Submitting analysis values: {team_size, team_duration, collab_type, industry, task_type, ts, len(slack_data.analysis_users_consented)}"
     )
+    # LSM
     add_analysis_db(
         context.team_id,
         team_size,
@@ -332,6 +343,19 @@ def handle_questionnaire_submission(ack, body, context):
         len(slack_data.analysis_users_consented),
         "lsm",
         slack_data.lsm_df.to_json(orient="records"),
+    )
+    # LSA
+    add_analysis_db(
+        context.team_id,
+        team_size,
+        team_duration,
+        collab_type,
+        industry,
+        task_type,
+        ts,
+        len(slack_data.analysis_users_consented),
+        "lsa",
+        slack_data.lsa_df.to_json(orient="records"),
     )
 
     # delete the analysis-specific data to free memory
@@ -517,6 +541,20 @@ async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
 
     # Return the image as a response
     return Response(content=lsm_image.read(), media_type="image/png")
+
+
+# will only be generate lsa visual if df_limit_exceeded is false
+# since the block containing the image is only shown in that case
+@api.get("/lsa_image")
+@limiter.limit(
+    "10/minute"
+)  # only generate lsa visualizations/computations if rate limit not exceeded
+async def get_lsa_image(request: Request, token: str, team_id: str, t: str):
+    slack_data = get_slack_data(app, token, team_id)
+    lsa_image = slack_data.create_lsa_vis()  # updates lsm_image property based on data
+
+    # Return the image as a response
+    return Response(content=lsa_image.read(), media_type="image/png")
 
 
 if __name__ == "__main__":

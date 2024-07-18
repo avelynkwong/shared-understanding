@@ -69,7 +69,7 @@ TABLES["analysis_results"] = (
     "  `n_users_consented` DOUBLE,"
     "  `method` VARCHAR(255),"
     "  `result` JSON,"
-    "  PRIMARY KEY (`team_id`)"
+    "  PRIMARY KEY (`team_id`, `method`)"
     ") ENGINE=InnoDB"
 )
 
