@@ -545,7 +545,6 @@ async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
 @api.get("/lsa_cosine_image")
 @limiter.limit("10/minute")
 async def get_lsa_cosine_image(request: Request, token: str, team_id: str, t: str):
-    print("CALLED GET IMAGE FUNCTION FOR COSINE")
     slack_data = get_slack_data(app, token, team_id)
     lsa_cosine_img = slack_data.create_lsa_visualizations(method="cosine_sim")
 

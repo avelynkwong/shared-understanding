@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import math
 import io
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib.dates as mdates
 
 
 def token_stem_stop(docs):
@@ -161,10 +162,6 @@ def moving_avg_lsa(df, window_size):
         # sort by timestamp
         channel_df.loc[:, "timestamp"] = pd.to_datetime(channel_df.loc[:, "timestamp"])
         channel_df = channel_df.sort_values(by="timestamp")
-
-        # don't do moving average if df too small
-        if len(channel_df) <= window_size:
-            window_size = 1
 
         for i in range(len(channel_df) - window_size - 1):
             window = channel_df.iloc[i : i + window_size]
@@ -344,89 +341,83 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
     # Loop through each channel
     for i, channel in enumerate(channels):
         channel_df = LSA_df[LSA_df["channel_id"] == channel]
-        channel_df.loc[:, "timestamp"] = channel_df.loc[:, "timestamp"].astype(str)
-        if len(channel_df) >= 2:
-            ax = axs[i]
-            if agg_type == "date":
-                ax.set_xlabel("Date")
-            elif agg_type == "message":
-                ax.set_xlabel("Number of Messages")
-            elif agg_type == "time":
-                ax.set_xlabel("Number of Time Intervals")
-            ax.set_ylabel("Cosine Similarity")
-            ax.set_title(
-                str(channel_df["channel_name"].iloc[0]),
-                fontsize=fontsize,
-                fontweight="bold",
-            )
-            ax.set_ylim(0, 1.09)
-            ax.set_yticks(ticks=np.arange(0, 1.1, 0.1))
-            ax.set_xticks(
-                np.arange(
-                    0,
-                    len(channel_df["timestamp"].unique()),
-                    math.ceil(len(channel_df["timestamp"].unique()) / 10),
-                )
-            )
-            ax.tick_params(axis="x", labelrotation=70)
-            ax.text(
-                0.95,
-                0.95,
-                (
-                    "Average Number of Users: "
-                    + str(
-                        np.round(
-                            np.mean(
-                                channel_df[channel_df["user"] == "group"]["num_users"]
-                            ),
-                            2,
-                        )
-                    )
-                ),
-                transform=ax.transAxes,
-                verticalalignment="top",
-                horizontalalignment="right",
-                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
-            )
 
-            # plt.text(
-            #     0.95,
-            #     0.8,
-            #     (
-            #         "Average standard deviation in coherence over time: "
-            #         + str(np.round(np.mean(channel_df["std"]), 2))
-            #     ),
-            #     transform=plt.gca().transAxes,
-            #     fontsize=12,
-            #     verticalalignment="top",
-            #     horizontalalignment="right",
-            #     bbox=dict(facecolor="white", alpha=0.5),
-            # )
-
-            for user, cosine_sim_df in channel_df.groupby("user"):
-                # sort by timestamp, then convert back to str
-                cosine_sim_df.loc[:, "timestamp"] = pd.to_datetime(
-                    cosine_sim_df.loc[:, "timestamp"]
+        ax = axs[i]
+        if agg_type == "date":
+            ax.set_xlabel("Date")
+        elif agg_type == "message":
+            ax.set_xlabel("Number of Messages")
+        elif agg_type == "time":
+            ax.set_xlabel("Number of Time Intervals")
+        ax.set_ylabel("Cosine Similarity")
+        ax.set_title(
+            str(channel_df["channel_name"].iloc[0]),
+            fontsize=fontsize,
+            fontweight="bold",
+        )
+        ax.set_ylim(0, 1.09)
+        ax.set_yticks(ticks=np.arange(0, 1.1, 0.1))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        ax.tick_params(axis="x", labelrotation=70)
+        ax.text(
+            0.95,
+            0.95,
+            (
+                "Average Number of Users: "
+                + str(
+                    np.round(
+                        np.mean(channel_df[channel_df["user"] == "group"]["num_users"]),
+                        2,
+                    )
                 )
-                cosine_sim_df = cosine_sim_df.sort_values(by="timestamp")
-                cosine_sim_df.loc[:, "timestamp"].astype(str)
-                if user == "group":
-                    ax.plot(
-                        cosine_sim_df["timestamp"],
-                        cosine_sim_df["cosine_sim"],
-                        marker="*",
-                        label=user,
-                        linestyle="--",
-                        linewidth=3,
-                        markersize=15,
-                    )
-                else:
-                    ax.plot(
-                        cosine_sim_df["timestamp"],
-                        cosine_sim_df["cosine_sim"],
-                        marker="o",
-                    )
-            ax.legend(title=None, loc="lower right", frameon=False)
+            ),
+            transform=ax.transAxes,
+            verticalalignment="top",
+            horizontalalignment="right",
+            bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
+        )
+
+        # plt.text(
+        #     0.95,
+        #     0.8,
+        #     (
+        #         "Average standard deviation in coherence over time: "
+        #         + str(np.round(np.mean(channel_df["std"]), 2))
+        #     ),
+        #     transform=plt.gca().transAxes,
+        #     fontsize=12,
+        #     verticalalignment="top",
+        #     horizontalalignment="right",
+        #     bbox=dict(facecolor="white", alpha=0.5),
+        # )
+
+        for user, cosine_sim_df in channel_df.groupby("user"):
+            # sort by timestamp, then convert back to str
+            cosine_sim_df.loc[:, "timestamp"] = pd.to_datetime(
+                cosine_sim_df.loc[:, "timestamp"]
+            )
+            cosine_sim_df = cosine_sim_df.sort_values(by="timestamp")
+            cosine_sim_df.loc[:, "timestamp"].astype(str)
+            if user == "group":
+                ax.plot(
+                    cosine_sim_df["timestamp"],
+                    cosine_sim_df["cosine_sim"],
+                    marker="*",
+                    label=user,
+                    linestyle="--",
+                    linewidth=5,
+                    markersize=15,
+                )
+            else:
+                ax.plot(
+                    cosine_sim_df["timestamp"],
+                    cosine_sim_df["cosine_sim"],
+                    marker="o",
+                )
+        ax.legend(title=None, loc="lower right", frameon=False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
     # Hide unused subplots if there are any
     for j in range(i + 1, len(axs)):
@@ -474,78 +465,71 @@ def LSA_coherence_vis(lsa_coherence_df, ma_window_size, agg_type="date"):
     for i, channel in enumerate(channels):
         channel_df = lsa_coherence_df[lsa_coherence_df["channel_id"] == channel]
         channel_df = channel_df.sort_values(by="timestamp")
-        if len(channel_df) >= 2:
-            ax = axs[i]
-            if agg_type == "date":
-                ax.set_xlabel("Date")
-            elif agg_type == "message":
-                ax.set_xlabel("Number of Messages")
-            elif agg_type == "time":
-                ax.set_xlabel("Number of Time Intervals")
-            ax.set_ylabel("Semantic Coherence")
-            ax.set_title(
-                str(channel_df["channel_name"].iloc[0]),
-                fontsize=fontsize,
-                fontweight="bold",
-            )
-            ax.set_ylim(0, 1.09)
-            ax.set_yticks(ticks=np.arange(0, 1.1, 0.1))
-            ax.set_xticks(
-                np.arange(
-                    0,
-                    len(channel_df["timestamp"].unique()),
-                    math.ceil(len(channel_df["timestamp"].unique()) / 10),
-                )
-            )
-            ax.tick_params(axis="x", labelrotation=70)
-            ax.text(
-                0.95,
-                0.95,
-                (
-                    "Average Number of Users: "
-                    + str(
-                        np.round(
-                            np.mean(
-                                channel_df[channel_df["user"] == "group"]["num_users"]
-                            ),
-                            2,
-                        )
+        ax = axs[i]
+        if agg_type == "date":
+            ax.set_xlabel("Date")
+        elif agg_type == "message":
+            ax.set_xlabel("Number of Messages")
+        elif agg_type == "time":
+            ax.set_xlabel("Number of Time Intervals")
+        ax.set_ylabel("Semantic Coherence")
+        ax.set_title(
+            str(channel_df["channel_name"].iloc[0]),
+            fontsize=fontsize,
+            fontweight="bold",
+        )
+        ax.set_ylim(0, 1.09)
+        ax.set_yticks(ticks=np.arange(0, 1.1, 0.1))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        ax.tick_params(axis="x", labelrotation=70)
+        ax.text(
+            0.95,
+            0.95,
+            (
+                "Average Number of Users: "
+                + str(
+                    np.round(
+                        np.mean(channel_df[channel_df["user"] == "group"]["num_users"]),
+                        2,
                     )
-                ),
-                transform=ax.transAxes,
-                verticalalignment="top",
-                horizontalalignment="right",
-                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
-            )
+                )
+            ),
+            transform=ax.transAxes,
+            verticalalignment="top",
+            horizontalalignment="right",
+            bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
+        )
 
-            ax.text(
-                0.95,
-                0.8,
-                (
-                    "Average standard deviation in coherence over time: "
-                    + str(np.round(np.mean(channel_df["std"]), 2))
-                ),
-                transform=ax.transAxes,
-                verticalalignment="top",
-                horizontalalignment="right",
-                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
-            )
+        ax.text(
+            0.95,
+            0.8,
+            (
+                "Average standard deviation in coherence over time: "
+                + str(np.round(np.mean(channel_df["std"]), 2))
+            ),
+            transform=ax.transAxes,
+            verticalalignment="top",
+            horizontalalignment="right",
+            bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
+        )
 
-            # plot only the group norms
-            group = channel_df[channel_df["user"] == "group"]
-            group = scale_group(group)  # scale to values between 0-1
-            group = moving_avg_lsa(group, ma_window_size)  # get moving average
-            group["timestamp"] = group["timestamp"].astype(str)
-            ax.plot(
-                group["timestamp"],
-                group["avg_coherence_scaled"],
-                marker="*",
-                linewidth=3,
-                linestyle="--",
-                label="group",
-                markersize=15,
-            )
-            ax.legend(title=None, loc="lower right", frameon=False)
+        # plot only the group norms
+        group = channel_df[channel_df["user"] == "group"]
+        group = scale_group(group)  # scale to values between 0-1
+        group = moving_avg_lsa(group, ma_window_size)  # get moving average
+        ax.plot(
+            group["timestamp"],
+            group["avg_coherence_scaled"],
+            marker="*",
+            linewidth=5,
+            linestyle="--",
+            label="group",
+            markersize=15,
+        )
+        ax.legend(title=None, loc="lower right", frameon=False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
     # Hide unused subplots if there are any
     for j in range(i + 1, len(axs)):

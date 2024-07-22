@@ -16,6 +16,7 @@ from slack_sdk.errors import SlackApiError
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 10000
 WINDOW_SIZE = 5
+MIN_MSGS = WINDOW_SIZE * 2
 
 # env vars
 load_dotenv()
@@ -297,6 +298,15 @@ class SlackData:
             lsa_coherence_img = LSA_coherence_vis(self.lsa_coherence_df, WINDOW_SIZE)
             return lsa_coherence_img
 
+    # make sure each channel has enough messages to apply moving average
+    def enough_msgs(self):
+        if self.msg_df.empty:
+            return False
+        for _, msgs in self.msg_df.groupby("channel_id"):
+            if len(msgs) < MIN_MSGS:
+                return False
+        return True
+
     def generate_homepage_view(
         self,
         bot_token,
@@ -305,7 +315,6 @@ class SlackData:
         vis_error=False,
         slackapi_limit_exceeded=False,
     ):
-        print("CALLED_GENERATE_HOMEPAGE VIEW!!!")
         slack_limit_exceeded_block = [
             {
                 "type": "section",
@@ -341,7 +350,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":exclamation: Please select channels and/or a valid date range containing more messages. You may need to manually re-select dates if the app homepage has just been opened.",
+                    "text": f":exclamation: Please select channels and/or a valid date range containing more messages (each channel selected should contain at least {MIN_MSGS} for analysis). You may need to manually re-select dates if the app homepage has just been opened.",
                 },
             },
         ]
@@ -436,9 +445,8 @@ class SlackData:
 
         if self.exceeded_df_limit:
             view["blocks"].extend(exceed_msg_limit_block)
-
         # insufficient messages to generate analysis, need enough messages in EACH channel
-        elif self.msg_df.empty and not loading:
+        elif not loading and not self.enough_msgs():
             view["blocks"].extend(invalid_selection_block)
         elif vis_error:
             view["blocks"].extend(vis_error_block)
