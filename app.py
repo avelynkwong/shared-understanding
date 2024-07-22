@@ -186,10 +186,7 @@ def set_start_date(ack, body, context, logger):
         app.client.views_publish(
             token=context.bot_token,
             user_id=body["user"]["id"],
-            view=slack_data.generate_homepage_view(
-                context.bot_token,
-                context.team_id,
-            ),
+            view=slack_data.generate_homepage_view(context.bot_token, context.team_id),
         )
     except Exception as e:
         app.client.views_publish(
@@ -545,16 +542,29 @@ async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
 
 # will only be generate lsa visual if df_limit_exceeded is false
 # since the block containing the image is only shown in that case
-@api.get("/lsa_image")
-@limiter.limit(
-    "10/minute"
-)  # only generate lsa visualizations/computations if rate limit not exceeded
-async def get_lsa_image(request: Request, token: str, team_id: str, t: str):
+@api.get("/lsa_cosine_image")
+@limiter.limit("10/minute")
+async def get_lsa_cosine_image(request: Request, token: str, team_id: str, t: str):
+    print("CALLED GET IMAGE FUNCTION FOR COSINE")
     slack_data = get_slack_data(app, token, team_id)
-    lsa_image = slack_data.create_lsa_vis()  # updates lsm_image property based on data
+    lsa_cosine_img = slack_data.create_lsa_visualizations(method="cosine_sim")
 
     # Return the image as a response
-    return Response(content=lsa_image.read(), media_type="image/png")
+    return Response(content=lsa_cosine_img.read(), media_type="image/png")
+
+
+# will only be generate lsa visual if df_limit_exceeded is false
+# since the block containing the image is only shown in that case
+@api.get("/lsa_coherence_image")
+@limiter.limit("10/minute")
+async def get_lsa_coherence_image(request: Request, token: str, team_id: str, t: str):
+    slack_data = get_slack_data(app, token, team_id)
+    lsa_coherence_img = slack_data.create_lsa_visualizations(
+        method="semantic_coherence"
+    )
+
+    # Return the image as a response
+    return Response(content=lsa_coherence_img.read(), media_type="image/png")
 
 
 if __name__ == "__main__":

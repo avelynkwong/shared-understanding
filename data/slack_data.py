@@ -14,7 +14,8 @@ from nlp_analysis.lsa import *
 from slack_sdk.errors import SlackApiError
 
 # maximum messages to store in dataframe
-MAX_DF_SIZE = 1000000
+MAX_DF_SIZE = 10000
+WINDOW_SIZE = 5
 
 # env vars
 load_dotenv()
@@ -31,7 +32,10 @@ class SlackData:
         self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
         self.lsm_df = pd.DataFrame()  # eventually holds lsm analysis results
-        self.lsa_df = pd.DataFrame()  # eventually holds lsa analysis results
+        self.lsa_cosine_df = pd.DataFrame()  # eventually holds lsa cosine sim results
+        self.lsa_coherence_df = (
+            pd.DataFrame()
+        )  # eventually holds lsa sem coherence results
         self.selected_conversations = []
         self.bot_token = bot_token
         self.all_invited_conversations = {}
@@ -57,7 +61,8 @@ class SlackData:
         self.msg_df = pd.DataFrame()
         self.analysis_users_consented = set()
         self.lsm_df = pd.DataFrame()
-        self.lsa_df = pd.DataFrame()
+        self.lsa_cosine_df = pd.DataFrame()
+        self.lsa_coherence_df = pd.DataFrame()
 
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
@@ -76,6 +81,7 @@ class SlackData:
             user_id=user_id,
             view=self.generate_homepage_view(user_id, self.team_id, loading=True),
         )
+
         # get the updated list of consented users every time there is a dataframe update
         self.consented_users = get_consented_users(self.team_id)
         # clear old results
@@ -266,17 +272,30 @@ class SlackData:
         # TODO: add look and remove the hard coded value to self.msg_df
         # get lsm values and generate image
         self.lsm_df = compute_lsm_scores(pd.read_csv("test_agg_w_luke.csv"))
-        self.lsm_df = group_average(self.lsm_df)
-        self.lsm_df = moving_avg(self.lsm_df)
+        self.lsm_df = grouped_avg_lsm_scores(self.lsm_df)
+        self.lsm_df = moving_avg_lsm(self.lsm_df, WINDOW_SIZE)
         lsm_image = per_channel_vis_LSM(self.lsm_df)
         return lsm_image
 
-    def create_lsa_vis(self):
-        self.lsa_df = compute_LSA_analysis(
-            self.msg_df, topic_proportion=20, step=2, memory=True
-        )
-        lsa_image = LSA_cosine_sim_vis(self.lsa_df)
-        return lsa_image
+    def create_lsa_visualizations(self, method):
+        if method == "cosine_sim":
+            self.lsa_cosine_df = compute_LSA_analysis(
+                self.msg_df,
+                topic_proportion=20,
+                step=2,
+                method=method,
+            )
+            lsa_cosine_img = LSA_cosine_sim_vis(self.lsa_cosine_df)
+            return lsa_cosine_img
+        elif method == "semantic_coherence":
+            self.lsa_coherence_df = compute_LSA_analysis(
+                self.msg_df,
+                topic_proportion=20,
+                step=2,
+                method=method,
+            )
+            lsa_coherence_img = LSA_coherence_vis(self.lsa_coherence_df, WINDOW_SIZE)
+            return lsa_coherence_img
 
     def generate_homepage_view(
         self,
@@ -286,6 +305,7 @@ class SlackData:
         vis_error=False,
         slackapi_limit_exceeded=False,
     ):
+        print("CALLED_GENERATE_HOMEPAGE VIEW!!!")
         slack_limit_exceeded_block = [
             {
                 "type": "section",
@@ -311,7 +331,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":exclamation: There was an error with visualization generation. Try selecting a larger date range.",
+                    "text": ":exclamation: There was an error with visualization generation.",
                 },
             },
         ]
@@ -321,7 +341,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": ":exclamation: Please select channels and/or a valid date range containing messages. You may need to manually re-select dates if the app homepage has just been opened.",
+                    "text": ":exclamation: Please select channels and/or a valid date range containing more messages. You may need to manually re-select dates if the app homepage has just been opened.",
                 },
             },
         ]
@@ -416,14 +436,16 @@ class SlackData:
 
         if self.exceeded_df_limit:
             view["blocks"].extend(exceed_msg_limit_block)
+
+        # insufficient messages to generate analysis, need enough messages in EACH channel
+        elif self.msg_df.empty and not loading:
+            view["blocks"].extend(invalid_selection_block)
         elif vis_error:
             view["blocks"].extend(vis_error_block)
         elif slackapi_limit_exceeded:
             view["blocks"].extend(slack_limit_exceeded_block)
         elif loading:
             view["blocks"].extend(loading_block)
-        elif self.msg_df.empty:
-            view["blocks"].extend(invalid_selection_block)
         else:
             vis_blocks = [
                 # {
@@ -450,9 +472,23 @@ class SlackData:
                 },
                 {
                     "type": "image",
-                    "block_id": "lsa_img",
-                    "image_url": f"{URI}/lsa_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
-                    "alt_text": "Latent Semantic Analysis Graph",
+                    "block_id": "lsa_cosine_mg",
+                    "image_url": f"{URI}/lsa_cosine_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                    "alt_text": "LSA Cosine Similarity",
+                },
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Semantic Coherence",
+                        "emoji": True,
+                    },
+                },
+                {
+                    "type": "image",
+                    "block_id": "lsa_coherence_img",
+                    "image_url": f"{URI}/lsa_coherence_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                    "alt_text": "LSA Semantic Coherence",
                 },
                 {
                     "type": "header",

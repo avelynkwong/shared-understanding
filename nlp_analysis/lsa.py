@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import io
+from sklearn.preprocessing import MinMaxScaler
 
 
 def token_stem_stop(docs):
@@ -141,43 +142,121 @@ def get_matrix_centroid(matrix, num_topics):
     return centroid
 
 
-# add the doc-topic matrices to each document grouped by channel and time
+def get_matrix_sum_norm(matrix, num_topics):
+    # create numpy array, rows = number of documents, cols = number of topics
+    array = np.zeros((len(matrix), num_topics))
+    for doc_idx, doc_dist in enumerate(matrix):
+        for topic_idx, topic_weight in doc_dist:
+            array[doc_idx][topic_idx] = topic_weight
+    # average along the topic dimension
+    sum = np.sum(array, axis=0)
+    norm = np.linalg.norm(sum)
+    return norm
+
+
+def moving_avg_lsa(df, window_size):
+    group_moving_avg = []
+    for channel_id in df["channel_id"].unique():
+        channel_df = df[df["channel_id"] == channel_id]
+        # sort by timestamp
+        channel_df.loc[:, "timestamp"] = pd.to_datetime(channel_df.loc[:, "timestamp"])
+        channel_df = channel_df.sort_values(by="timestamp")
+
+        # don't do moving average if df too small
+        if len(channel_df) <= window_size:
+            window_size = 1
+
+        for i in range(len(channel_df) - window_size - 1):
+            window = channel_df.iloc[i : i + window_size]
+            moving_avg = window["coherence_scaled"].mean()
+            group_moving_avg.append(
+                {
+                    "channel_id": channel_id,
+                    "channel_name": window["channel_name"].iloc[(window_size // 2)],
+                    "timestamp": window["timestamp"].iloc[(window_size // 2)],
+                    "num_users": window["num_users"].mean(),
+                    "avg_coherence_scaled": moving_avg,
+                }
+            )
+    group_moving_avg = pd.DataFrame(group_moving_avg)
+    return group_moving_avg
+
+
+# add the doc-topic matrices to each document
 def get_LSA_topic_dists(df, best_model, logent_transformation, dictionary):
     LSA_topic_dists = []
-    for channel_id in df["channel_id"].unique():
-        for time in df["timestamp"].unique():
-            filtered_df = df[
-                (df["channel_id"] == channel_id) & (df["timestamp"] == time)
-            ]
-            if len(filtered_df) == 0:
-                continue
-
-            # for each document in a channel within a time interval, get the distribution across all topics
-            for i, doc in filtered_df.iterrows():
-                doc_topic_dist = best_model[
-                    logent_transformation[
-                        (dictionary.doc2bow(doc["processed_for_LSA"]))
-                    ]
-                ]
-                LSA_topic_dists.append(
-                    {
-                        "channel_id": channel_id,
-                        "channel_name": filtered_df["channel_name"].iloc[0],
-                        "timestamp": time,
-                        "num_users": len(filtered_df["user_id"].unique()),
-                        "user": doc["user_id"],
-                        "matrix": doc_topic_dist,
-                    }
-                )
+    for i, doc in df.iterrows():
+        doc_topic_dist = best_model[
+            logent_transformation[(dictionary.doc2bow(doc["processed_for_LSA"]))]
+        ]
+        LSA_topic_dists.append(
+            {
+                "channel_id": doc["channel_id"],
+                "channel_name": doc["channel_name"],
+                "timestamp": doc["timestamp"],
+                "user": doc["user_id"],
+                "matrix": doc_topic_dist,
+            }
+        )
     LSA_topic_dists = pd.DataFrame(LSA_topic_dists)
     return LSA_topic_dists
 
 
-def memory_cosine_sim(df, best_model, logent_transformation, dictionary):
+def no_mem_semantic_coherence(LSA_topic_dists, best_model):
+
+    semantic_coherences = []
+    for channel_id in LSA_topic_dists["channel_id"].unique():
+        df_channel = LSA_topic_dists[LSA_topic_dists["channel_id"] == channel_id]
+        channel_name = df_channel["channel_name"].iloc[0]
+        for time in df_channel["timestamp"].unique():
+            channel_time_df = df_channel[df_channel["timestamp"] == time]
+            num_users = len(channel_time_df["user"].unique())
+            # calculate group norm
+            group_norm = get_matrix_sum_norm(
+                channel_time_df["matrix"], best_model.num_topics
+            )
+
+            # calculate individual person norms
+            indiv_norms = []
+            for user in channel_time_df["user"].unique():
+                channel_time_user_df = channel_time_df[channel_time_df["user"] == user]
+                user_norm = get_matrix_sum_norm(
+                    channel_time_user_df["matrix"], best_model.num_topics
+                )
+                semantic_coherences.append(
+                    {
+                        "channel_id": channel_id,
+                        "channel_name": channel_name,
+                        "timestamp": time,
+                        "num_users": None,
+                        "user": user,
+                        "coherence": user_norm,
+                        "std": None,
+                    }
+                )
+                indiv_norms.append(user_norm)
+
+            # get standard deviation of the individual norms on each day
+            std = np.std(indiv_norms)
+            # add the group norm and std to the output
+            semantic_coherences.append(
+                {
+                    "channel_id": channel_id,
+                    "channel_name": channel_name,
+                    "timestamp": time,
+                    "num_users": num_users,
+                    "user": "group",
+                    "coherence": group_norm,
+                    "std": std,
+                }
+            )
+
+    semantic_coherences = pd.DataFrame(semantic_coherences)
+    return semantic_coherences
+
+
+def memory_cosine_sim(LSA_topic_dists, best_model):
     # option with memory
-    LSA_topic_dists = get_LSA_topic_dists(
-        df, best_model, logent_transformation, dictionary
-    )  # TODO: don't call within this function! we want to reuse this dataframe for the semantic coherence method
 
     # calculate the running average centroids and compute cosine similarities with final group centroid
     cosine_similarities = []
@@ -192,17 +271,15 @@ def memory_cosine_sim(df, best_model, logent_transformation, dictionary):
 
         # calculating running average centroids for all docs up to different times for each channel
         for time in df_channel["timestamp"].unique():
+            # aggregate docs up until the current time
             channel_time_df = df_channel[df_channel["timestamp"] <= time]
-            num_users = len(channel_time_df["user"].unique())
-            # num_user_list = [num_users] * (num_users + 1)
-            # channel_list = [channel_id] * (num_users + 1)
-            # time_list = [time] * (num_users + 1)
-            # channel_name_list = [df_filtered["channel_name"].iloc[0]] * (num_users + 1)
+            # num users should be from the current timestamp only
+            num_users = len(
+                df_channel[df_channel["timestamp"] == time]["user"].unique()
+            )
 
             # calculate running average centroid for all docs in the channel with a timestamp <= time
             channel_time_matrix = channel_time_df["matrix"]
-            # if type(channel_time_matrix[0]) is tuple:
-            #     channel_time_matrix = [channel_time_matrix]
             group_centroid = get_matrix_centroid(
                 channel_time_matrix, best_model.num_topics
             )
@@ -223,9 +300,6 @@ def memory_cosine_sim(df, best_model, logent_transformation, dictionary):
             for user in channel_time_df["user"].unique():
                 channel_time_user_df = channel_time_df[channel_time_df["user"] == user]
                 channel_time_user_matrix = channel_time_user_df["matrix"]
-                # if len(channel_time_user_matrix) > 0:
-                #     if type(channel_time_user_matrix[0]) is tuple:
-                #         channel_time_user_matrix = [channel_time_user_matrix]
                 user_centroid = get_matrix_centroid(
                     channel_time_user_matrix, best_model.num_topics
                 )
@@ -250,7 +324,6 @@ def memory_cosine_sim(df, best_model, logent_transformation, dictionary):
 
 
 def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
-
     channels = LSA_df["channel_id"].unique()
 
     # styling
@@ -271,7 +344,7 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
     # Loop through each channel
     for i, channel in enumerate(channels):
         channel_df = LSA_df[LSA_df["channel_id"] == channel]
-        channel_df = channel_df.sort_values(by="timestamp")
+        channel_df.loc[:, "timestamp"] = channel_df.loc[:, "timestamp"].astype(str)
         if len(channel_df) >= 2:
             ax = axs[i]
             if agg_type == "date":
@@ -288,12 +361,13 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
             )
             ax.set_ylim(0, 1.09)
             ax.set_yticks(ticks=np.arange(0, 1.1, 0.1))
-            step_size = math.ceil(
-                (max(channel_df["timestamp"]) - min(channel_df["timestamp"])).days / 10
+            ax.set_xticks(
+                np.arange(
+                    0,
+                    len(channel_df["timestamp"].unique()),
+                    math.ceil(len(channel_df["timestamp"].unique()) / 10),
+                )
             )
-            # set x-axis ticks and format
-            # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=step_size))
-            # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
             ax.tick_params(axis="x", labelrotation=70)
             ax.text(
                 0.95,
@@ -329,14 +403,29 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
             #     bbox=dict(facecolor="white", alpha=0.5),
             # )
 
-            legend_user = "group"
-            for user, group in channel_df.groupby("user"):
-                if user == legend_user:
+            for user, cosine_sim_df in channel_df.groupby("user"):
+                # sort by timestamp, then convert back to str
+                cosine_sim_df.loc[:, "timestamp"] = pd.to_datetime(
+                    cosine_sim_df.loc[:, "timestamp"]
+                )
+                cosine_sim_df = cosine_sim_df.sort_values(by="timestamp")
+                cosine_sim_df.loc[:, "timestamp"].astype(str)
+                if user == "group":
                     ax.plot(
-                        group["timestamp"], group["cosine_sim"], marker="o", label=user
+                        cosine_sim_df["timestamp"],
+                        cosine_sim_df["cosine_sim"],
+                        marker="*",
+                        label=user,
+                        linestyle="--",
+                        linewidth=3,
+                        markersize=15,
                     )
                 else:
-                    ax.plot(group["timestamp"], group["cosine_sim"], marker="o")
+                    ax.plot(
+                        cosine_sim_df["timestamp"],
+                        cosine_sim_df["cosine_sim"],
+                        marker="o",
+                    )
             ax.legend(title=None, loc="lower right", frameon=False)
 
     # Hide unused subplots if there are any
@@ -354,7 +443,126 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
     return buf
 
 
-def compute_LSA_analysis(df, topic_proportion, step, memory=True):
+def scale_group(group):
+    scaler = MinMaxScaler()
+    group.loc[:, "coherence_scaled"] = scaler.fit_transform(
+        group.loc[:, "coherence"].values.reshape(-1, 1)
+    )
+    return group
+
+
+def LSA_coherence_vis(lsa_coherence_df, ma_window_size, agg_type="date"):
+
+    channels = lsa_coherence_df["channel_id"].unique()
+
+    # styling
+    fontsize = 20
+    plt.style.use("dark_background")
+    plt.rcParams["font.size"] = fontsize
+
+    # subplot columns
+    cols = 1
+    # subplot rows
+    rows = math.ceil(len(channels) / cols)
+    fig, axs = plt.subplots(rows, cols, figsize=(20, rows * 6))
+    if not isinstance(axs, np.ndarray):
+        axs = [axs]
+    else:
+        axs = axs.flatten()
+
+    # Loop through each channel
+    for i, channel in enumerate(channels):
+        channel_df = lsa_coherence_df[lsa_coherence_df["channel_id"] == channel]
+        channel_df = channel_df.sort_values(by="timestamp")
+        if len(channel_df) >= 2:
+            ax = axs[i]
+            if agg_type == "date":
+                ax.set_xlabel("Date")
+            elif agg_type == "message":
+                ax.set_xlabel("Number of Messages")
+            elif agg_type == "time":
+                ax.set_xlabel("Number of Time Intervals")
+            ax.set_ylabel("Semantic Coherence")
+            ax.set_title(
+                str(channel_df["channel_name"].iloc[0]),
+                fontsize=fontsize,
+                fontweight="bold",
+            )
+            ax.set_ylim(0, 1.09)
+            ax.set_yticks(ticks=np.arange(0, 1.1, 0.1))
+            ax.set_xticks(
+                np.arange(
+                    0,
+                    len(channel_df["timestamp"].unique()),
+                    math.ceil(len(channel_df["timestamp"].unique()) / 10),
+                )
+            )
+            ax.tick_params(axis="x", labelrotation=70)
+            ax.text(
+                0.95,
+                0.95,
+                (
+                    "Average Number of Users: "
+                    + str(
+                        np.round(
+                            np.mean(
+                                channel_df[channel_df["user"] == "group"]["num_users"]
+                            ),
+                            2,
+                        )
+                    )
+                ),
+                transform=ax.transAxes,
+                verticalalignment="top",
+                horizontalalignment="right",
+                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
+            )
+
+            ax.text(
+                0.95,
+                0.8,
+                (
+                    "Average standard deviation in coherence over time: "
+                    + str(np.round(np.mean(channel_df["std"]), 2))
+                ),
+                transform=ax.transAxes,
+                verticalalignment="top",
+                horizontalalignment="right",
+                bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
+            )
+
+            # plot only the group norms
+            group = channel_df[channel_df["user"] == "group"]
+            group = scale_group(group)  # scale to values between 0-1
+            group = moving_avg_lsa(group, ma_window_size)  # get moving average
+            group["timestamp"] = group["timestamp"].astype(str)
+            ax.plot(
+                group["timestamp"],
+                group["avg_coherence_scaled"],
+                marker="*",
+                linewidth=3,
+                linestyle="--",
+                label="group",
+                markersize=15,
+            )
+            ax.legend(title=None, loc="lower right", frameon=False)
+
+    # Hide unused subplots if there are any
+    for j in range(i + 1, len(axs)):
+        fig.delaxes(axs[j])
+
+    plt.tight_layout(w_pad=0.2, h_pad=1)
+    # plt.subplots_adjust(wspace=0.2, hspace=1)
+
+    # save plot to buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.5)
+    buf.seek(0)
+    plt.close(fig)
+    return buf
+
+
+def compute_LSA_analysis(df, topic_proportion, step, method):
     """
     Inputs:
         df: dataframe that has already be preprocessed with general_preprocessing (remove non dict words, etc.) and aggregated
@@ -372,18 +580,19 @@ def compute_LSA_analysis(df, topic_proportion, step, memory=True):
         matrix, dictionary, lsa_processed_docs, topic_proportion, step
     )
 
-    # compute cosine similarity LSA method
-    LSA_cosine_sim_df = memory_cosine_sim(
+    LSA_topic_dists = get_LSA_topic_dists(
         df, best_model, logent_transformation, dictionary
     )
 
-    # compute semantic coherence LSA method
+    if method == "cosine_sim":
+        # compute cosine similarity LSA method
+        LSA_cosine_sim_df = memory_cosine_sim(LSA_topic_dists, best_model)
+        return LSA_cosine_sim_df
 
-    return LSA_cosine_sim_df
-    # else: # no memory of previous aggregation
-    #     LSA_df = no_memory_coherence(test_output, best_model, logent_transformation, dictionary)
-
-    # LSA_viz(LSA_df, agg_type)
+    if method == "semantic_coherence":
+        # compute semantic coherence LSA method
+        LSA_coherence_df = no_mem_semantic_coherence(LSA_topic_dists, best_model)
+        return LSA_coherence_df
 
 
 # preprocessed_df = pd.read_csv("test_agg_w_luke.csv")

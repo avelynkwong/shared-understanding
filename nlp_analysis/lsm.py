@@ -70,7 +70,7 @@ def compute_lsm_scores(df):
     return lsm_result
 
 
-def group_average(df_result):
+def grouped_avg_lsm_scores(df_result):
     avg_lsm = []
     for channel in df_result["channel_id"].unique():
         for time in df_result["timestamp"].unique():
@@ -98,10 +98,19 @@ def group_average(df_result):
     return avg_lsm
 
 
-def moving_avg(group_avg, window_size=5):
+def moving_avg_lsm(group_avg, window_size):
     group_moving_avg = []
     for channel_id in group_avg["channel_id"].unique():
         channel_df = group_avg[group_avg["channel_id"] == channel_id]
+
+        # sort by timestamp
+        channel_df.loc[:, "timestamp"] = pd.to_datetime(channel_df.loc[:, "timestamp"])
+        channel_df = channel_df.sort_values(by="timestamp")
+
+        # don't do moving avg if df too small
+        if len(channel_df) <= window_size:
+            return group_avg
+
         for i in range(len(channel_df) - window_size - 1):
             window = channel_df.iloc[i : i + window_size]
             moving_avg = window["avg_LSM"].mean()
@@ -141,6 +150,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
     for i, channel in enumerate(channels):
         channel_df = group_avg[group_avg["channel_id"] == channel]
         channel_df = channel_df.sort_values(by="timestamp")
+        channel_df.loc[:, "timestamp"] = channel_df.loc[:, "timestamp"].astype(str)
         if len(channel_df) >= 2:
             ax = axs[i]
             if agg_type == "date":
