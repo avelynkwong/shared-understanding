@@ -1,6 +1,5 @@
 import mysql.connector
 from get_secrets import get_secret
-from sqlalchemy import create_engine
 
 mysql_secrets = get_secret("mysql_secrets")
 
@@ -11,11 +10,6 @@ config = {
     "port": mysql_secrets["port"],
     "database": mysql_secrets["dbInstanceIdentifier"],
 }
-
-# Create a connection string
-connection_string = f"mysql+pymysql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}"
-# Create an SQLAlchemy engine
-engine = create_engine(connection_string)
 
 
 def add_user_consent(team_id, user_id, tz):
@@ -117,8 +111,27 @@ def get_consented_users(team_id):
     return consented_users
 
 
-def add_reacts_db(reacts):
-    reacts.to_sql(name="reacts", con=engine, if_exists="append", index=False)
+def add_reacts_db(team_id, timestamp, reacts_json):
+    insert_cmd = (
+        "INSERT INTO reacts (team_id, timestamp, react_data) VALUES (%s, %s, %s)"
+    )
+
+    try:
+        # connect to db
+        cnx = mysql.connector.connect(**config)
+        cursor = cnx.cursor()
+        # execute insert cmd
+        cursor.execute(insert_cmd, (team_id, timestamp, reacts_json))
+        cnx.commit()
+
+    except mysql.connector.Error as err:
+        print("Error: {}".format(err))
+
+    finally:
+        if cursor:
+            cursor.close()
+        if cnx:
+            cnx.close()
 
 
 def add_analysis_db(

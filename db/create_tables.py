@@ -75,11 +75,10 @@ TABLES["analysis_results"] = (
 
 TABLES["reacts"] = (
     "CREATE TABLE `reacts` ("
-    "  `user_id` VARCHAR(255),"
-    "  `channel_id` VARCHAR(255),"
-    "  `react_type` VARCHAR(255),"
+    "  `team_id` VARCHAR(255),"
     "  `timestamp` DATETIME,"
-    "  PRIMARY KEY (`user_id`, `react_type`, `timestamp`)"
+    "  `react_data` JSON,"
+    "  PRIMARY KEY (`team_id`)"
     ") ENGINE=InnoDB"
 )
 

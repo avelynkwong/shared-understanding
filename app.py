@@ -369,7 +369,9 @@ def handle_questionnaire_submission(ack, body, context):
     )
 
     # add reacts to database
-    add_reacts_db(slack_data.reactions)
+    add_reacts_db(
+        slack_data.team_id, ts, slack_data.reactions.to_json(orient="records")
+    )
 
     # delete the analysis-specific data to free memory
     slack_data.clear_analysis_data()
