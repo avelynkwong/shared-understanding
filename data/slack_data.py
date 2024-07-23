@@ -385,7 +385,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f":exclamation: Please select channels and/or a valid date range containing more messages (each channel selected should contain at least {MIN_MSGS} for analysis). You may need to manually re-select dates if the app homepage has just been opened.",
+                    "text": f":exclamation: Please select channels and/or a valid date range containing more messages (each channel selected should contain at least {MIN_MSGS} messages for analysis). You may need to manually re-select dates if the app homepage has just been opened.",
                 },
             },
         ]

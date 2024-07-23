@@ -376,6 +376,13 @@ def handle_questionnaire_submission(ack, body, context):
     # delete the analysis-specific data to free memory
     slack_data.clear_analysis_data()
 
+    # reset homepage
+    app.client.views_publish(
+        token=context.bot_token,
+        user_id=context.user_id,
+        view=slack_data.generate_homepage_view(context.user_id, context.team_id),
+    )
+
 
 # delete user data when uninstall occurs
 @app.event("tokens_revoked")
