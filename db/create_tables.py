@@ -73,6 +73,16 @@ TABLES["analysis_results"] = (
     ") ENGINE=InnoDB"
 )
 
+TABLES["reacts"] = (
+    "CREATE TABLE `reacts` ("
+    "  `user_id` VARCHAR(255),"
+    "  `channel_id` VARCHAR(255),"
+    "  `react_type` VARCHAR(255),"
+    "  `timestamp` DATETIME,"
+    "  PRIMARY KEY (`user_id`, `react_type`, `timestamp`)"
+    ") ENGINE=InnoDB"
+)
+
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor()
 

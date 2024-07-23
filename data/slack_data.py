@@ -47,6 +47,10 @@ class SlackData:
             set()
         )  # number of users consented in the current selected conversations/time period
 
+        # keep track of reacts sent and attachments sent for post analysis
+        self.reactions = pd.DataFrame(columns=["user_id", "react_type", "timestamp"])
+        self.attachments = pd.DataFrame(columns=["user_id", "timestamp"])
+
         # Information to be displayed on homepage
         self.consent_exclusions = 0  # messages excluded due to lack of consent
         # self.subsampling_exclusions = 0  # messages excluded due to max df size limit
@@ -64,6 +68,8 @@ class SlackData:
         self.lsm_df = pd.DataFrame()
         self.lsa_cosine_df = pd.DataFrame()
         self.lsa_coherence_df = pd.DataFrame()
+        self.reactions = pd.DataFrame(columns=["user_id", "react_type", "timestamp"])
+        self.attachments = pd.DataFrame(columns=["user_id", "timestamp"])
 
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
@@ -198,6 +204,24 @@ class SlackData:
                 if reacts:
                     for react in reacts:
                         reacts_cnt += react["count"]
+                        for user_id in react["users"]:
+                            record = {
+                                "user_id": user_id,
+                                "channel_id": channel_id,
+                                "react_type": react["name"],
+                                "timestamp": ts,
+                            }
+                            self.reactions = pd.concat(
+                                [
+                                    (
+                                        self.reactions
+                                        if not self.reactions.empty
+                                        else None
+                                    ),
+                                    pd.DataFrame([record]),
+                                ],
+                                ignore_index=True,
+                            )
                 reply_dict["reacts_cnt"] = reacts_cnt
                 self.msg_df = pd.concat(
                     [self.msg_df, pd.DataFrame([reply_dict])], ignore_index=True
@@ -227,6 +251,17 @@ class SlackData:
                 if reacts:
                     for react in reacts:
                         reacts_cnt += react["count"]
+                        for user_id in react["users"]:
+                            record = {
+                                "user_id": user_id,
+                                "channel_id": channel_id,
+                                "react_type": react["name"],
+                                "timestamp": ts,
+                            }
+                            self.reactions = pd.concat(
+                                [self.reactions, pd.DataFrame([record])],
+                                ignore_index=True,
+                            )
                 msg_dict["reacts_cnt"] = reacts_cnt
                 self.msg_df = pd.concat(
                     [self.msg_df, pd.DataFrame([msg_dict])], ignore_index=True
@@ -273,9 +308,9 @@ class SlackData:
         # TODO: add look and remove the hard coded value to self.msg_df
         # get lsm values and generate image
         self.lsm_df = compute_lsm_scores(pd.read_csv("test_agg_w_luke.csv"))
-        self.lsm_df = grouped_avg_lsm_scores(self.lsm_df)
-        self.lsm_df = moving_avg_lsm(self.lsm_df, WINDOW_SIZE)
-        lsm_image = per_channel_vis_LSM(self.lsm_df)
+        self.lsm_df = grouped_lsm_scores(self.lsm_df)
+        lsm_df_avg = moving_avg_lsm(self.lsm_df, WINDOW_SIZE)
+        lsm_image = per_channel_vis_LSM(lsm_df_avg)
         return lsm_image
 
     def create_lsa_visualizations(self, method):

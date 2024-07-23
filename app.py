@@ -341,7 +341,7 @@ def handle_questionnaire_submission(ack, body, context):
         "lsm",
         slack_data.lsm_df.to_json(orient="records"),
     )
-    # LSA
+    # LSA cosine similarity
     add_analysis_db(
         context.team_id,
         team_size,
@@ -351,9 +351,25 @@ def handle_questionnaire_submission(ack, body, context):
         task_type,
         ts,
         len(slack_data.analysis_users_consented),
-        "lsa",
-        slack_data.lsa_df.to_json(orient="records"),
+        "lsa cosine similarity",
+        slack_data.lsa_cosine_df.to_json(orient="records"),
     )
+    # LSA semantic coherence
+    add_analysis_db(
+        context.team_id,
+        team_size,
+        team_duration,
+        collab_type,
+        industry,
+        task_type,
+        ts,
+        len(slack_data.analysis_users_consented),
+        "lsa semantic coherence",
+        slack_data.lsa_coherence_df.to_json(orient="records"),
+    )
+
+    # add reacts to database
+    add_reacts_db(slack_data.reactions)
 
     # delete the analysis-specific data to free memory
     slack_data.clear_analysis_data()

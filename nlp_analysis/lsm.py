@@ -71,7 +71,8 @@ def compute_lsm_scores(df):
     return lsm_result
 
 
-def grouped_avg_lsm_scores(df_result):
+# get the average LSM scores for each channel-day
+def grouped_lsm_scores(df_result):
     avg_lsm = []
     for channel in df_result["channel_id"].unique():
         for time in df_result["timestamp"].unique():
@@ -204,6 +205,7 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
             linewidth=5,
             alpha=0.8,
             marker="*",
+            markersize=15,
         )
 
         ax.spines["top"].set_visible(False)

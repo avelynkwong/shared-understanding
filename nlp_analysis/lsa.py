@@ -364,7 +364,7 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
             0.95,
             0.95,
             (
-                "Average Number of Users: "
+                "Average users per day: "
                 + str(
                     np.round(
                         np.mean(channel_df[channel_df["user"] == "group"]["num_users"]),
@@ -436,6 +436,7 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
 
 def scale_group(group):
     scaler = MinMaxScaler()
+    group = group.copy()
     group.loc[:, "coherence_scaled"] = scaler.fit_transform(
         group.loc[:, "coherence"].values.reshape(-1, 1)
     )
@@ -487,7 +488,7 @@ def LSA_coherence_vis(lsa_coherence_df, ma_window_size, agg_type="date"):
             0.95,
             0.95,
             (
-                "Average Number of Users: "
+                "Average users per day: "
                 + str(
                     np.round(
                         np.mean(channel_df[channel_df["user"] == "group"]["num_users"]),
