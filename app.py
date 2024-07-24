@@ -373,6 +373,11 @@ def handle_questionnaire_submission(ack, body, context):
         slack_data.team_id, ts, slack_data.reactions.to_json(orient="records")
     )
 
+    # add attachments to database
+    add_attachments_db(
+        slack_data.team_id, ts, slack_data.attachments.to_json(orient="records")
+    )
+
     # delete the analysis-specific data to free memory
     slack_data.clear_analysis_data()
 

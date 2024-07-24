@@ -200,13 +200,41 @@ class SlackData:
                 reply_dict["text"] = str(reply["text"])
                 reply_dict["replies_cnt"] = 0
                 reacts = reply.get("reactions", None)
+
+                if contains_link(reply["text"]):
+                    attachment_record = {
+                        "user_id": user_id,
+                        "channel_id": channel_id,
+                        "attachment_type": "link",
+                    }
+                    self.attachments = pd.concat(
+                        [
+                            self.attachments if not self.attachments.empty else None,
+                            pd.DataFrame([attachment_record]),
+                        ],
+                        ignore_index=True,
+                    )
+                if contains_attachment(reply):
+                    attachment_record = {
+                        "user_id": user_id,
+                        "channel_id": channel_id,
+                        "attachment_type": "attachment",
+                    }
+                    self.attachments = pd.concat(
+                        [
+                            self.attachments if not self.attachments.empty else None,
+                            pd.DataFrame([attachment_record]),
+                        ],
+                        ignore_index=True,
+                    )
+
                 reacts_cnt = 0
                 if reacts:
                     for react in reacts:
                         reacts_cnt += react["count"]
-                        for user_id in react["users"]:
+                        for react_user_id in react["users"]:
                             record = {
-                                "user_id": user_id,
+                                "user_id": react_user_id,
                                 "channel_id": channel_id,
                                 "react_type": react["name"],
                                 "timestamp": ts,
@@ -248,18 +276,46 @@ class SlackData:
                 msg_dict["replies_cnt"] = msg.get("reply_count", 0)
                 reacts = msg.get("reactions", None)
                 reacts_cnt = 0
+
+                if contains_link(msg_dict["text"]):
+                    attachment_record = {
+                        "user_id": user_id,
+                        "channel_id": channel_id,
+                        "attachment_type": "link",
+                    }
+                    self.attachments = pd.concat(
+                        [
+                            self.attachments if not self.attachments.empty else None,
+                            pd.DataFrame([attachment_record]),
+                        ],
+                        ignore_index=True,
+                    )
+                if contains_attachment(msg):
+                    attachment_record = {
+                        "user_id": user_id,
+                        "channel_id": channel_id,
+                        "attachment_type": "attachment",
+                    }
+                    self.attachments = pd.concat(
+                        [
+                            self.attachments if not self.attachments.empty else None,
+                            pd.DataFrame([attachment_record]),
+                        ],
+                        ignore_index=True,
+                    )
+
                 if reacts:
                     for react in reacts:
                         reacts_cnt += react["count"]
-                        for user_id in react["users"]:
-                            record = {
-                                "user_id": user_id,
+                        for react_user_id in react["users"]:
+                            react_record = {
+                                "user_id": react_user_id,
                                 "channel_id": channel_id,
                                 "react_type": react["name"],
                                 "timestamp": ts,
                             }
                             self.reactions = pd.concat(
-                                [self.reactions, pd.DataFrame([record])],
+                                [self.reactions, pd.DataFrame([react_record])],
                                 ignore_index=True,
                             )
                 msg_dict["reacts_cnt"] = reacts_cnt

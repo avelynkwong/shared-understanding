@@ -82,6 +82,15 @@ TABLES["reacts"] = (
     ") ENGINE=InnoDB"
 )
 
+TABLES["attachments"] = (
+    "CREATE TABLE `attachments` ("
+    "  `team_id` VARCHAR(255),"
+    "  `timestamp` DATETIME,"
+    "  `attachment_data` JSON,"
+    "  PRIMARY KEY (`team_id`)"
+    ") ENGINE=InnoDB"
+)
+
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor()
 

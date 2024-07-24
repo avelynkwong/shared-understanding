@@ -134,6 +134,27 @@ def add_reacts_db(team_id, timestamp, reacts_json):
             cnx.close()
 
 
+def add_attachments_db(team_id, timestamp, attachment_json):
+    insert_cmd = "INSERT INTO attachments (team_id, timestamp, attachment_data) VALUES (%s, %s, %s)"
+
+    try:
+        # connect to db
+        cnx = mysql.connector.connect(**config)
+        cursor = cnx.cursor()
+        # execute insert cmd
+        cursor.execute(insert_cmd, (team_id, timestamp, attachment_json))
+        cnx.commit()
+
+    except mysql.connector.Error as err:
+        print("Error: {}".format(err))
+
+    finally:
+        if cursor:
+            cursor.close()
+        if cnx:
+            cnx.close()
+
+
 def add_analysis_db(
     team_id,
     team_size,

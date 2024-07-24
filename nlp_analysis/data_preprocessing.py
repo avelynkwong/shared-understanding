@@ -2,6 +2,19 @@ import re
 import enchant
 
 
+def contains_link(text):
+    # Regular expression to match URLs
+    url_regex = re.compile(
+        r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+    )
+    return re.search(url_regex, text) is not None
+
+
+def contains_attachment(message):
+    # Check if the message contains 'attachments' or 'files'
+    return "attachments" in message or "files" in message
+
+
 def filter_non_dict_words(text):
     # check spelling of words
     d = enchant.Dict("en_US")
