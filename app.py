@@ -8,6 +8,7 @@ from forms.questionnaire_form import get_questionnaire
 import os
 from starlette.responses import RedirectResponse
 from slack_bolt.oauth.oauth_settings import OAuthSettings
+import json
 
 # oauth imports
 from oauth.custom_installation_store import CustomFileInstallationStore
@@ -68,6 +69,26 @@ def get_slack_data(app, bot_token, team_id):
     return workspace_data[team_id]
 
 
+# get all member ids belonging to a channel
+def get_channel_users(bot_token, channel_id):
+    all_channel_users = []
+    members_info = app.client.conversations_members(token=bot_token, channel=channel_id)
+    user_ids = members_info["members"]
+    all_channel_users.extend(user_ids)
+    next_cursor = members_info["response_metadata"]["next_cursor"]
+
+    # page through members in the channel
+    while next_cursor:
+        members_info = app.client.conversations_members(
+            token=bot_token, channel=channel_id, cursor=next_cursor
+        )
+        user_ids = members_info["members"]
+        all_channel_users.extend(user_ids)
+        next_cursor = members_info["response_metadata"]["next_cursor"]
+
+    return all_channel_users
+
+
 # INTERACTIVE COMPONENTS
 
 
@@ -117,23 +138,7 @@ def send_consent_form(event, client, context):
         )  # add bot as a consenting user
 
         channel_id = event["channel"]
-        all_channel_users = []
-        members_info = client.conversations_members(
-            token=context.bot_token, channel=channel_id
-        )
-        user_ids = members_info["members"]
-        all_channel_users.extend(user_ids)
-        next_cursor = members_info["response_metadata"]["next_cursor"]
-
-        # page through members in the channel
-        while next_cursor:
-            members_info = client.conversations_members(
-                token=context.bot_token, channel=channel_id, cursor=next_cursor
-            )
-            user_ids = members_info["members"]
-            all_channel_users.extend(user_ids)
-            next_cursor = members_info["response_metadata"]["next_cursor"]
-
+        all_channel_users = get_channel_users(context.bot_token, channel_id)
         consented_users = get_consented_users(context.team_id)
         # get all users that haven't consented yet
         non_consented_users = list(set(all_channel_users) - set(consented_users))
@@ -232,7 +237,7 @@ def set_end_date(ack, body, context, logger):
 
 # determine the list of conversations that the slack app has access to
 @app.options("select_conversations")
-def list_conversations(ack, context):
+def select_leaders(ack, context):
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
     # list of conversations app has access to
     slack_data.get_invited_conversations()
@@ -243,6 +248,33 @@ def list_conversations(ack, context):
     ack({"options": conv_names})
 
 
+# provide list of members in the selected converstations
+@app.options("select_leaders")
+def select_leaders(ack, context):
+    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    # list of channel ids
+    selected_channel_ids = [
+        slack_data.all_invited_conversations[c] for c in slack_data.selected_conv_names
+    ]
+    # all users in each of the selected conversations
+    all_users = []
+    for channel_id in selected_channel_ids:
+        all_users.extend(get_channel_users(context.bot_token, channel_id))
+    all_users = set(all_users)
+
+    all_names = []
+    for user_id in all_users:
+        user_info = app.client.users_info(token=context.bot_token, user=user_id)["user"]
+        if not user_info["is_bot"]:
+            all_names.append(user_info["real_name"])
+            slack_data.user_name_to_id[user_info["real_name"]] = user_id
+    names = [
+        {"text": {"type": "plain_text", "text": name}, "value": name}
+        for name in all_names
+    ]
+    ack({"options": names})
+
+
 # update the selected conversations
 @app.action("select_conversations")
 def select_conversations(ack, body, context):
@@ -250,7 +282,7 @@ def select_conversations(ack, body, context):
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
     selected_convs = body["actions"][0]["selected_options"]
     selected_conv_names = [c["value"] for c in selected_convs]
-    slack_data.selected_conversations = selected_conv_names
+    slack_data.selected_conv_names = selected_conv_names
     # update homescreen with selected conversations' analysis
     slack_data.update_dataframe(context.user_id)
     # update homepage
@@ -311,6 +343,8 @@ def display_questionnaire(ack, body, context):
 def handle_questionnaire_submission(ack, body, context):
     ack()
     values = body["view"]["state"]["values"]
+    selected_leaders = values["leaders"]["select_leaders"]["selected_options"]
+    selected_leaders = [o["value"] for o in selected_leaders]
     team_size = values["team_size"]["team_size"]["selected_option"]["value"]
     team_duration = values["team_duration"]["team_duration"]["selected_option"]["value"]
     collab_type = values["collaboration_type"]["collaboration_type"]["selected_option"][
@@ -323,14 +357,20 @@ def handle_questionnaire_submission(ack, body, context):
         task_type = task_type_other
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
 
+    # anonymize the leader names
+    selected_leader_ids = json.dumps(
+        [slack_data.user_name_to_id[n] for n in selected_leaders]
+    )
+
     # submit analysis results
     ts = datetime.datetime.now()
     print(
-        f"Submitting analysis values: {team_size, team_duration, collab_type, industry, task_type, ts, len(slack_data.analysis_users_consented)}"
+        f"Submitting analysis values: {selected_leader_ids, team_size, team_duration, collab_type, industry, task_type, ts, len(slack_data.analysis_users_consented)}"
     )
     # LSM
     add_analysis_db(
         context.team_id,
+        selected_leader_ids,
         team_size,
         team_duration,
         collab_type,
@@ -344,6 +384,7 @@ def handle_questionnaire_submission(ack, body, context):
     # LSA cosine similarity
     add_analysis_db(
         context.team_id,
+        selected_leader_ids,
         team_size,
         team_duration,
         collab_type,
@@ -357,6 +398,7 @@ def handle_questionnaire_submission(ack, body, context):
     # LSA semantic coherence
     add_analysis_db(
         context.team_id,
+        selected_leader_ids,
         team_size,
         team_duration,
         collab_type,

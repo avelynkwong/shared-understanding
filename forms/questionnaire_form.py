@@ -5,6 +5,8 @@ from slack_sdk.models.blocks import (
     StaticSelectElement,
     Option,
     SectionBlock,
+    ExternalDataMultiSelectElement,
+    PlainTextObject,
 )
 
 
@@ -20,6 +22,15 @@ def get_questionnaire():
                     "type": "mrkdwn",
                     "text": "Please fill out the following form to submit your analysis results.",
                 }
+            ),
+            InputBlock(
+                block_id="leaders",
+                label={"type": "plain_text", "text": "Select team leaders"},
+                element=ExternalDataMultiSelectElement(
+                    action_id="select_leaders",
+                    placeholder=PlainTextObject(text="Select the team leader(s)"),
+                    min_query_length=0,
+                ),
             ),
             InputBlock(
                 block_id="team_size",

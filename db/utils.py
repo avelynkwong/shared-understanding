@@ -157,6 +157,7 @@ def add_attachments_db(team_id, timestamp, attachment_json):
 
 def add_analysis_db(
     team_id,
+    leaders,
     team_size,
     team_duration,
     collaboration_type,
@@ -168,7 +169,7 @@ def add_analysis_db(
     result,
 ):
 
-    insert_cmd = "INSERT INTO analysis_results (team_id, team_size, team_duration, collaboration_type, industry, task_type, timestamp, n_users_consented, method, result) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    insert_cmd = "INSERT INTO analysis_results (team_id, leaders, team_size, team_duration, collaboration_type, industry, task_type, timestamp, n_users_consented, method, result) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
     try:
         # connect to db
@@ -179,6 +180,7 @@ def add_analysis_db(
             insert_cmd,
             (
                 team_id,
+                leaders,
                 team_size,
                 team_duration,
                 collaboration_type,

@@ -37,7 +37,11 @@ class SlackData:
         self.lsa_coherence_df = (
             pd.DataFrame()
         )  # eventually holds lsa sem coherence results
-        self.selected_conversations = []
+        self.selected_conv_ids = []
+        self.selected_conv_names = []
+        self.user_name_to_id = (
+            {}
+        )  # map real names to user ids for database leader submission
         self.bot_token = bot_token
         self.all_invited_conversations = {}
         self.get_invited_conversations()
@@ -96,7 +100,7 @@ class SlackData:
 
         # keep track of total number of message exclusions due to unconsenting users
         self.consent_exclusions = 0  # reset
-        for c in self.selected_conversations:
+        for c in self.selected_conv_names:
             self.get_channel_messages(c, user_id)
             if len(self.msg_df) > MAX_DF_SIZE:
                 self.exceeded_df_limit = True

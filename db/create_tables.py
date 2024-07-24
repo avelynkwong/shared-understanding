@@ -60,6 +60,7 @@ TABLES["consent"] = (
 TABLES["analysis_results"] = (
     "CREATE TABLE `analysis_results` ("
     "  `team_id` VARCHAR(255),"
+    "  `leaders` JSON,"
     "  `team_size` VARCHAR(255),"
     "  `team_duration` VARCHAR(255),"
     "  `collaboration_type` VARCHAR(255),"
