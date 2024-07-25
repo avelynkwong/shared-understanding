@@ -151,7 +151,7 @@ def get_matrix_sum_norm(matrix, num_topics):
     for doc_idx, doc_dist in enumerate(matrix):
         for topic_idx, topic_weight in doc_dist:
             array[doc_idx][topic_idx] = topic_weight
-    # average along the topic dimension
+    # sum topics across all documents
     sum = np.sum(array, axis=0)
     norm = np.linalg.norm(sum)
     return norm

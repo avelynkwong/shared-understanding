@@ -94,7 +94,7 @@ def get_channel_users(bot_token, channel_id):
 
 @app.event("app_home_opened")
 def load_homepage(client, context):
-
+    print(context)
     slack_data = get_slack_data(app, context.bot_token, context.team_id)
     slack_data.clear_analysis_data()
     slack_data.reset_dates()
