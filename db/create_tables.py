@@ -36,7 +36,7 @@ TABLES["installations"] = (
     "  `incoming_webhook_configuration_url` VARCHAR(255),"
     "  `is_enterprise_install` BOOLEAN,"
     "  `token_type` VARCHAR(255),"
-    "  PRIMARY KEY (`team_id`)"
+    "  PRIMARY KEY (`user_id`)"
     ") ENGINE=InnoDB"
 )
 
@@ -70,7 +70,7 @@ TABLES["analysis_results"] = (
     "  `n_users_consented` DOUBLE,"
     "  `method` VARCHAR(255),"
     "  `result` JSON,"
-    "  PRIMARY KEY (`team_id`, `method`)"
+    "  PRIMARY KEY (`team_id`, `method`, `timestamp`)"
     ") ENGINE=InnoDB"
 )
 

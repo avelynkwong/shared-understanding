@@ -615,7 +615,7 @@ async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
 # will only be generate lsa visual if df_limit_exceeded is false
 # since the block containing the image is only shown in that case
 @api.get("/lsa_cosine_image")
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def get_lsa_cosine_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
     lsa_cosine_img = slack_data.create_lsa_visualizations(method="cosine_sim")
@@ -627,7 +627,7 @@ async def get_lsa_cosine_image(request: Request, token: str, team_id: str, t: st
 # will only be generate lsa visual if df_limit_exceeded is false
 # since the block containing the image is only shown in that case
 @api.get("/lsa_coherence_image")
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def get_lsa_coherence_image(request: Request, token: str, team_id: str, t: str):
     slack_data = get_slack_data(app, token, team_id)
     lsa_coherence_img = slack_data.create_lsa_visualizations(

@@ -110,7 +110,7 @@ def apply_transformation(doc, dictionary, logent_transformation):
     return logent_transformation[normalized_bow]
 
 
-def build_model(matrix, dictionary, df_processed, topic_proportion, step):
+def build_model(matrix, dictionary, df_processed, step):
 
     # log entropy transformation
     logent_transformation = LogEntropyModel(matrix, dictionary)
@@ -126,7 +126,9 @@ def build_model(matrix, dictionary, df_processed, topic_proportion, step):
         filtered_dictionary,
         filtered_corpus,
         df_processed,
-        stop=10,  # TODO: change back to: len(df_processed) // topic_proportion,
+        stop=10
+        + ((len(df_processed) - 200) // 200)
+        * 2,  # start with 10 topics; for every 200 more messages, add 2 more topic models to train
         step=step,
     )
     return best_model, logent_transformation
@@ -547,12 +549,11 @@ def LSA_coherence_vis(lsa_coherence_df, ma_window_size, agg_type="date"):
     return buf
 
 
-def compute_LSA_analysis(df, topic_proportion, step, method):
+def compute_LSA_analysis(df, step, method):
     """
     Inputs:
         df: dataframe that has already be preprocessed with general_preprocessing (remove non dict words, etc.) and aggregated
         agg_type: how messages are grouped into documents
-        topic_proportion: 1/topic_proportion is the maximum number of topics to train for the LSA model
 
     """
     # tokenize the messages
@@ -562,7 +563,7 @@ def compute_LSA_analysis(df, topic_proportion, step, method):
     dictionary, matrix = prepare_corpus(lsa_processed_docs)
 
     best_model, logent_transformation = build_model(
-        matrix, dictionary, lsa_processed_docs, topic_proportion, step
+        matrix, dictionary, lsa_processed_docs, step
     )
 
     LSA_topic_dists = get_LSA_topic_dists(

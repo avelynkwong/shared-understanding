@@ -62,7 +62,7 @@ class CustomFileInstallationStore(FileInstallationStore):
         try:
             # connect to db
             cnx = mysql.connector.connect(**config)
-            cursor = cnx.cursor(dictionary=True)
+            cursor = cnx.cursor(dictionary=True, buffered=True)
             # execute the select cmd
             cursor.execute(select_cmd, (team_id,))
             # fetch the result

@@ -14,9 +14,9 @@ from nlp_analysis.lsa import *
 from slack_sdk.errors import SlackApiError
 
 # maximum messages to store in dataframe
-MAX_DF_SIZE = 10000
+MAX_DF_SIZE = 5000
 WINDOW_SIZE = 5
-MIN_MSGS = WINDOW_SIZE * 2
+MIN_DF_SIZE = WINDOW_SIZE * 2
 
 # env vars
 load_dotenv()
@@ -377,7 +377,6 @@ class SlackData:
         if method == "cosine_sim":
             self.lsa_cosine_df = compute_LSA_analysis(
                 self.msg_df,
-                topic_proportion=20,
                 step=2,
                 method=method,
             )
@@ -386,7 +385,6 @@ class SlackData:
         elif method == "semantic_coherence":
             self.lsa_coherence_df = compute_LSA_analysis(
                 self.msg_df,
-                topic_proportion=20,
                 step=2,
                 method=method,
             )
@@ -398,7 +396,7 @@ class SlackData:
         if self.msg_df.empty:
             return False
         for _, msgs in self.msg_df.groupby("channel_id"):
-            if len(msgs) < MIN_MSGS:
+            if len(msgs) < MIN_DF_SIZE:
                 return False
         return True
 
@@ -445,7 +443,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f":exclamation: Please select channels and/or a valid date range containing more messages (each channel selected should contain at least {MIN_MSGS} messages for analysis). You may need to manually re-select dates if the app homepage has just been opened.",
+                    "text": f":exclamation: Please select channels and/or a valid date range containing more messages (each channel selected should contain at least {MIN_DF_SIZE} active channel-days for analysis). You may need to manually re-select dates if the app homepage has just been opened.",
                 },
             },
         ]
