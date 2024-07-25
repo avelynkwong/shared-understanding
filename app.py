@@ -63,10 +63,12 @@ workspace_data = {}
 
 
 # create new slack data object if non-existent
-def get_slack_data(app, bot_token, team_id):
-    if not team_id in workspace_data:
-        workspace_data[team_id] = SlackData(app, bot_token, team_id)
-    return workspace_data[team_id]
+def get_slack_data(app, bot_token, team_id, actor_user_id):
+    if not actor_user_id in workspace_data:
+        workspace_data[actor_user_id] = SlackData(
+            app, bot_token, team_id, actor_user_id
+        )
+    return workspace_data[actor_user_id]
 
 
 # get all member ids belonging to a channel
@@ -94,8 +96,9 @@ def get_channel_users(bot_token, channel_id):
 
 @app.event("app_home_opened")
 def load_homepage(client, context):
-    print(context)
-    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data = get_slack_data(
+        app, context.bot_token, context.team_id, context.actor_user_id
+    )
     slack_data.clear_analysis_data()
     slack_data.reset_dates()
 
@@ -104,21 +107,25 @@ def load_homepage(client, context):
         client.views_publish(
             token=context.bot_token,
             # the user that opened your app's app home
-            user_id=context.user_id,
+            user_id=context.actor_user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
                 context.bot_token,
                 context.team_id,
+                context.actor_user_id,
             ),
         )
     except Exception as e:
         client.views_publish(
             token=context.bot_token,
             # the user that opened your app's app home
-            user_id=context.user_id,
+            user_id=context.actor_user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.bot_token, context.team_id, vis_error=True
+                context.bot_token,
+                context.team_id,
+                context.actor_user_id,
+                vis_error=True,
             ),
         )
 
@@ -182,25 +189,32 @@ def send_consent_form(event, client, context):
 @app.block_action("startdate_picked")
 def set_start_date(ack, body, context, logger):
     ack()
-    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data = get_slack_data(
+        app, context.bot_token, context.team_id, context.actor_user_id
+    )
     slack_data.start_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
-    slack_data.update_dataframe(context.user_id)
+    slack_data.update_dataframe(context.actor_user_id)
     # update homepage
     try:
         app.client.views_publish(
             token=context.bot_token,
-            user_id=body["user"]["id"],
-            view=slack_data.generate_homepage_view(context.bot_token, context.team_id),
+            user_id=context.actor_user_id,
+            view=slack_data.generate_homepage_view(
+                context.bot_token, context.team_id, context.actor_user_id
+            ),
         )
     except Exception as e:
         app.client.views_publish(
             token=context.bot_token,
             # the user that opened your app's app home
-            user_id=context.user_id,
+            user_id=context.actor_user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.bot_token, context.team_id, vis_error=True
+                context.bot_token,
+                context.team_id,
+                context.actor_user_id,
+                vis_error=True,
             ),
         )
 
@@ -209,28 +223,34 @@ def set_start_date(ack, body, context, logger):
 @app.block_action("enddate_picked")
 def set_end_date(ack, body, context, logger):
     ack()
-    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data = get_slack_data(
+        app, context.bot_token, context.team_id, context.actor_user_id
+    )
     slack_data.end_date = body["actions"][0]["selected_date"]
     # update homescreen with correct timeframe's analysis
-    slack_data.update_dataframe(context.user_id)
+    slack_data.update_dataframe(context.actor_user_id)
     # update homepage
     try:
         app.client.views_publish(
             token=context.bot_token,
-            user_id=context.user_id,
+            user_id=context.actor_user_id,
             view=slack_data.generate_homepage_view(
                 context.bot_token,
                 context.team_id,
+                context.actor_user_id,
             ),
         )
     except Exception as e:
         app.client.views_publish(
             token=context.bot_token,
             # the user that opened your app's app home
-            user_id=context.user_id,
+            user_id=context.actor_user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.bot_token, context.team_id, vis_error=True
+                context.bot_token,
+                context.team_id,
+                context.actor_user_id,
+                vis_error=True,
             ),
         )
 
@@ -238,7 +258,9 @@ def set_end_date(ack, body, context, logger):
 # determine the list of conversations that the slack app has access to
 @app.options("select_conversations")
 def select_leaders(ack, context):
-    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data = get_slack_data(
+        app, context.bot_token, context.team_id, context.actor_user_id
+    )
     # list of conversations app has access to
     slack_data.get_invited_conversations()
     conv_names = [
@@ -251,7 +273,9 @@ def select_leaders(ack, context):
 # provide list of members in the selected converstations
 @app.options("select_leaders")
 def select_leaders(ack, context):
-    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data = get_slack_data(
+        app, context.bot_token, context.team_id, context.actor_user_id
+    )
     # list of channel ids
     selected_channel_ids = [
         slack_data.all_invited_conversations[c] for c in slack_data.selected_conv_names
@@ -279,30 +303,36 @@ def select_leaders(ack, context):
 @app.action("select_conversations")
 def select_conversations(ack, body, context):
     ack()
-    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data = get_slack_data(
+        app, context.bot_token, context.team_id, context.actor_user_id
+    )
     selected_convs = body["actions"][0]["selected_options"]
     selected_conv_names = [c["value"] for c in selected_convs]
     slack_data.selected_conv_names = selected_conv_names
     # update homescreen with selected conversations' analysis
-    slack_data.update_dataframe(context.user_id)
+    slack_data.update_dataframe(context.actor_user_id)
     # update homepage
     try:
         app.client.views_publish(
             token=context.bot_token,
-            user_id=context.user_id,
+            user_id=context.actor_user_id,
             view=slack_data.generate_homepage_view(
                 context.bot_token,
                 context.team_id,
+                context.actor_user_id,
             ),
         )
     except Exception as e:
         app.client.views_publish(
             token=context.bot_token,
             # the user that opened your app's app home
-            user_id=context.user_id,
+            user_id=context.actor_user_id,
             # the view object that appears in the app home
             view=slack_data.generate_homepage_view(
-                context.bot_token, context.team_id, vis_error=True
+                context.bot_token,
+                context.team_id,
+                context.actor_user_id,
+                vis_error=True,
             ),
         )
 
@@ -322,7 +352,7 @@ def add_consented_users(ack, body, context):
 @app.action("consent_no")
 def remove_consented_users(ack, body, context):
     ack()
-    delete_user_consent(context.user_id)
+    delete_user_consent(context.actor_user_id)
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
     post_dissent_confirmation(context.bot_token, app.client, channel_id, user_name)
@@ -355,7 +385,9 @@ def handle_questionnaire_submission(ack, body, context):
     task_type_other = values["task_type_other"]["task_type_other"]["value"]
     if task_type_other:
         task_type = task_type_other
-    slack_data = get_slack_data(app, context.bot_token, context.team_id)
+    slack_data = get_slack_data(
+        app, context.bot_token, context.team_id, context.actor_user_id
+    )
 
     # anonymize the leader names
     selected_leader_ids = json.dumps(
@@ -426,8 +458,10 @@ def handle_questionnaire_submission(ack, body, context):
     # reset homepage
     app.client.views_publish(
         token=context.bot_token,
-        user_id=context.user_id,
-        view=slack_data.generate_homepage_view(context.user_id, context.team_id),
+        user_id=context.actor_user_id,
+        view=slack_data.generate_homepage_view(
+            context.bot_token, context.team_id, context.actor_user_id
+        ),
     )
 
 
@@ -604,8 +638,10 @@ async def slack_interactions(request: Request):
 @limiter.limit(
     "10/minute"
 )  # only generate lsm visualizations/computations if rate limit not exceeded
-async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
-    slack_data = get_slack_data(app, token, team_id)
+async def get_lsm_image(
+    request: Request, token: str, team_id: str, actor_user_id: str, t: str
+):
+    slack_data = get_slack_data(app, token, team_id, actor_user_id)
     lsm_image = slack_data.create_lsm_vis()  # updates lsm_image property based on data
 
     # Return the image as a response
@@ -616,8 +652,10 @@ async def get_lsm_image(request: Request, token: str, team_id: str, t: str):
 # since the block containing the image is only shown in that case
 @api.get("/lsa_cosine_image")
 @limiter.limit("5/minute")
-async def get_lsa_cosine_image(request: Request, token: str, team_id: str, t: str):
-    slack_data = get_slack_data(app, token, team_id)
+async def get_lsa_cosine_image(
+    request: Request, token: str, team_id: str, actor_user_id: str, t: str
+):
+    slack_data = get_slack_data(app, token, team_id, actor_user_id)
     lsa_cosine_img = slack_data.create_lsa_visualizations(method="cosine_sim")
 
     # Return the image as a response
@@ -628,8 +666,10 @@ async def get_lsa_cosine_image(request: Request, token: str, team_id: str, t: st
 # since the block containing the image is only shown in that case
 @api.get("/lsa_coherence_image")
 @limiter.limit("5/minute")
-async def get_lsa_coherence_image(request: Request, token: str, team_id: str, t: str):
-    slack_data = get_slack_data(app, token, team_id)
+async def get_lsa_coherence_image(
+    request: Request, token: str, team_id: str, actor_user_id: str, t: str
+):
+    slack_data = get_slack_data(app, token, team_id, actor_user_id)
     lsa_coherence_img = slack_data.create_lsa_visualizations(
         method="semantic_coherence"
     )

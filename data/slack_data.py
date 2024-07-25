@@ -25,7 +25,7 @@ URI = os.getenv("SLACK_URI")
 
 # class to hold slack data, each installer will have an instance of this class
 class SlackData:
-    def __init__(self, app, bot_token, team_id) -> None:
+    def __init__(self, app, bot_token, team_id, actor_user_id) -> None:
         self.app = app
         self.start_date = str(
             (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -46,6 +46,7 @@ class SlackData:
         self.all_invited_conversations = {}
         self.get_invited_conversations()
         self.team_id = team_id
+        self.actor_user_id = actor_user_id
         self.consented_users = []
         self.analysis_users_consented = (
             set()
@@ -85,12 +86,14 @@ class SlackData:
         return
 
     # populate dataframe with messages from all selected channels
-    def update_dataframe(self, user_id):
+    def update_dataframe(self, actor_user_id):
         # publish loading view
         self.app.client.views_publish(
             token=self.bot_token,
-            user_id=user_id,
-            view=self.generate_homepage_view(user_id, self.team_id, loading=True),
+            user_id=actor_user_id,
+            view=self.generate_homepage_view(
+                self.bot_token, self.team_id, self.actor_user_id, loading=True
+            ),
         )
 
         # get the updated list of consented users every time there is a dataframe update
@@ -101,7 +104,7 @@ class SlackData:
         # keep track of total number of message exclusions due to unconsenting users
         self.consent_exclusions = 0  # reset
         for c in self.selected_conv_names:
-            self.get_channel_messages(c, user_id)
+            self.get_channel_messages(c, actor_user_id)
             if len(self.msg_df) > MAX_DF_SIZE:
                 self.exceeded_df_limit = True
                 return
@@ -136,7 +139,7 @@ class SlackData:
             self.msg_df.to_csv("message_df_postprocessed.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
-    def get_channel_messages(self, channel_name, user_id):
+    def get_channel_messages(self, channel_name, actor_user_id):
 
         print(f"Getting messages for channel {channel_name}")
         channel_id = self.all_invited_conversations[channel_name]
@@ -151,7 +154,7 @@ class SlackData:
             messages = history["messages"]
             has_more = history["has_more"]
 
-            self.add_messages_to_df(messages, channel_name, channel_id, user_id)
+            self.add_messages_to_df(messages, channel_name, channel_id, actor_user_id)
 
             # paging through time, each page contains maximum 100 messages
             while has_more:
@@ -166,15 +169,18 @@ class SlackData:
                     )
                     messages = history["messages"]
                     has_more = history["has_more"]
-                    self.add_messages_to_df(messages, channel_name, channel_id, user_id)
+                    self.add_messages_to_df(
+                        messages, channel_name, channel_id, actor_user_id
+                    )
                 except SlackApiError as e:
                     if e.response["error"] == "ratelimited":
                         self.app.client.views_publish(
                             token=self.bot_token,
-                            user_id=user_id,
+                            user_id=actor_user_id,
                             view=self.generate_homepage_view(
                                 self.bot_token,
                                 self.team_id,
+                                self.actor_user_id,
                                 slackapi_limit_exceeded=True,
                             ),
                         )
@@ -182,9 +188,12 @@ class SlackData:
             if e.response["error"] == "ratelimited":
                 self.app.client.views_publish(
                     token=self.bot_token,
-                    user_id=user_id,
+                    user_id=actor_user_id,
                     view=self.generate_homepage_view(
-                        self.bot_token, self.team_id, slackapi_limit_exceeded=True
+                        self.bot_token,
+                        self.team_id,
+                        self.actor_user_id,
+                        slackapi_limit_exceeded=True,
                     ),
                 )
 
@@ -346,6 +355,7 @@ class SlackData:
                                 view=self.generate_homepage_view(
                                     self.bot_token,
                                     self.team_id,
+                                    self.actor_user_id,
                                     slackapi_limit_exceeded=True,
                                 ),
                             )
@@ -404,6 +414,7 @@ class SlackData:
         self,
         bot_token,
         team_id,
+        actor_user_id,
         loading=False,
         vis_error=False,
         slackapi_limit_exceeded=False,
@@ -574,7 +585,7 @@ class SlackData:
                 {
                     "type": "image",
                     "block_id": "lsa_cosine_mg",
-                    "image_url": f"{URI}/lsa_cosine_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                    "image_url": f"{URI}/lsa_cosine_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
                     "alt_text": "LSA Cosine Similarity",
                 },
                 {
@@ -588,7 +599,7 @@ class SlackData:
                 {
                     "type": "image",
                     "block_id": "lsa_coherence_img",
-                    "image_url": f"{URI}/lsa_coherence_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                    "image_url": f"{URI}/lsa_coherence_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
                     "alt_text": "LSA Semantic Coherence",
                 },
                 {
@@ -602,7 +613,7 @@ class SlackData:
                 {
                     "type": "image",
                     "block_id": "lsm_img",
-                    "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&t={str(time.time())}",
+                    "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
                     "alt_text": "Latent Semantic Matching Graph",
                 },
                 {
