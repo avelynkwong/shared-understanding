@@ -21,6 +21,20 @@ def generate_consent_form():
     ]
 
 
+def get_latest_message_ts(bot_token, client, channel_id):
+    try:
+        last_msg = client.conversations_history(
+            token=bot_token,
+            channel=channel_id,
+            limit=1,  # Adjust the limit based on how many recent messages you want to fetch
+        )["messages"][0]
+        print(last_msg)
+        return last_msg["ts"]
+    except Exception as e:
+        print(f"Error retrieving message history: {e}")
+        return None
+
+
 def post_consent_confirmation(bot_token, client, channel_id, user_name):
     blocks = [
         {
@@ -42,12 +56,14 @@ def post_consent_confirmation(bot_token, client, channel_id, user_name):
             ],
         },
     ]
+    latest_ts = get_latest_message_ts(bot_token, client, channel_id)
     try:
-        client.chat_postMessage(
-            text="Consent Confirmation",
+        client.chat_update(
             token=bot_token,
             channel=channel_id,
+            ts=latest_ts,
             blocks=blocks,
+            text="Consent Confirmation",
         )
     except Exception as e:
         print(f"Error updating message: {e}")
@@ -74,12 +90,14 @@ def post_dissent_confirmation(bot_token, client, channel_id, user_name):
             ],
         },
     ]
+    latest_ts = get_latest_message_ts(bot_token, client, channel_id)
     try:
-        client.chat_postMessage(
-            text="Dissent Confirmation",
+        client.chat_update(
             token=bot_token,
             channel=channel_id,
+            ts=latest_ts,
             blocks=blocks,
+            text="Dissent Confirmation",
         )
     except Exception as e:
         print(f"Error updating message: {e}")

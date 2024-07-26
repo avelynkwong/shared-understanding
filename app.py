@@ -606,7 +606,10 @@ async def oauth_redirect(req: Request):
 
             # create slack_data object
             workspace_data[installation["team_id"]] = SlackData(
-                app, installation["bot_token"], installation["team_id"]
+                app,
+                installation["bot_token"],
+                installation["team_id"],
+                installation["user_id"],
             )
 
             return {"message": "Thanks for installing!"}
