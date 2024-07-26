@@ -145,15 +145,15 @@ def get_matrix_centroid(matrix, num_topics):
     return centroid
 
 
-def get_matrix_sum_norm(matrix, num_topics):
+def get_matrix_norm(matrix, num_topics):
     # create numpy array, rows = number of documents, cols = number of topics
     array = np.zeros((len(matrix), num_topics))
     for doc_idx, doc_dist in enumerate(matrix):
         for topic_idx, topic_weight in doc_dist:
             array[doc_idx][topic_idx] = topic_weight
-    # sum topics across all documents
-    sum = np.sum(array, axis=0)
-    norm = np.linalg.norm(sum)
+    # average each topic value across all documents
+    mean = np.mean(array, axis=0)
+    norm = np.linalg.norm(mean)
     return norm
 
 
@@ -211,7 +211,7 @@ def no_mem_semantic_coherence(LSA_topic_dists, best_model):
             channel_time_df = df_channel[df_channel["timestamp"] == time]
             num_users = len(channel_time_df["user"].unique())
             # calculate group norm
-            group_norm = get_matrix_sum_norm(
+            group_norm = get_matrix_norm(
                 channel_time_df["matrix"], best_model.num_topics
             )
 
@@ -219,7 +219,7 @@ def no_mem_semantic_coherence(LSA_topic_dists, best_model):
             indiv_norms = []
             for user in channel_time_df["user"].unique():
                 channel_time_user_df = channel_time_df[channel_time_df["user"] == user]
-                user_norm = get_matrix_sum_norm(
+                user_norm = get_matrix_norm(
                     channel_time_user_df["matrix"], best_model.num_topics
                 )
                 semantic_coherences.append(
@@ -520,10 +520,12 @@ def LSA_coherence_vis(lsa_coherence_df, ma_window_size, agg_type="date"):
         # plot only the group norms
         group = channel_df[channel_df["user"] == "group"]
         group = scale_group(group)  # scale to values between 0-1
-        group = moving_avg_lsa(group, ma_window_size)  # get moving average
+        # group = moving_avg_lsa(group, ma_window_size)  # get moving average #TODO: add ma back?
         ax.plot(
             group["timestamp"],
-            group["avg_coherence_scaled"],
+            group[
+                "coherence_scaled"
+            ],  # TODO: add the ma back? group["avg_coherence_scaled"],
             marker="*",
             linewidth=5,
             linestyle="--",

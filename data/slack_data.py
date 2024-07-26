@@ -15,7 +15,7 @@ from slack_sdk.errors import SlackApiError
 
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 5000
-WINDOW_SIZE = 5
+WINDOW_SIZE = 3
 MIN_DF_SIZE = WINDOW_SIZE * 2
 
 # env vars
