@@ -353,7 +353,7 @@ def LSA_cosine_sim_vis(LSA_df, agg_type="date"):
             ax.set_xlabel("Number of Time Intervals")
         ax.set_ylabel("Cosine Similarity")
         ax.set_title(
-            str(channel_df["channel_name"].iloc[0]),
+            f"Knowledge Convergence for Channel: {str(channel_df['channel_name'].iloc[0])}",
             fontsize=fontsize,
             fontweight="bold",
         )
@@ -445,7 +445,7 @@ def scale_group(group):
     return group
 
 
-def LSA_coherence_vis(lsa_coherence_df, ma_window_size, agg_type="date"):
+def LSA_coherence_vis(lsa_coherence_df, agg_type="date"):
 
     channels = lsa_coherence_df["channel_id"].unique()
 
@@ -477,7 +477,7 @@ def LSA_coherence_vis(lsa_coherence_df, ma_window_size, agg_type="date"):
             ax.set_xlabel("Number of Time Intervals")
         ax.set_ylabel("Semantic Coherence")
         ax.set_title(
-            str(channel_df["channel_name"].iloc[0]),
+            f"Semantic Coherence for Channel: {str(channel_df['channel_name'].iloc[0])}",
             fontsize=fontsize,
             fontweight="bold",
         )

@@ -11,6 +11,7 @@ from nlp_analysis.data_preprocessing import *
 from nlp_analysis.aggregation import *
 from nlp_analysis.lsm import *
 from nlp_analysis.lsa import *
+from nlp_analysis.embedding import *
 from slack_sdk.errors import SlackApiError
 
 # maximum messages to store in dataframe
@@ -37,6 +38,9 @@ class SlackData:
         self.lsa_coherence_df = (
             pd.DataFrame()
         )  # eventually holds lsa sem coherence results
+        self.pp_embedding_df = (
+            pd.DataFrame()
+        )  # eventually holds embedding space results for pp 1D vis
         self.selected_conv_ids = []
         self.selected_conv_names = []
         self.user_name_to_id = (
@@ -398,8 +402,14 @@ class SlackData:
                 step=2,
                 method=method,
             )
-            lsa_coherence_img = LSA_coherence_vis(self.lsa_coherence_df, WINDOW_SIZE)
+            lsa_coherence_img = LSA_coherence_vis(self.lsa_coherence_df)
             return lsa_coherence_img
+
+    def create_embedding_vis(self):
+        self.pp_embedding_df = get_embeddings(self.msg_df)
+        self.pp_embedding_df = vis_preprocessing(self.pp_embedding_df)
+        pp_embedding_img = vis_perperson(self.pp_embedding_df)
+        return pp_embedding_img
 
     # make sure each channel has enough messages to apply moving average
     def enough_msgs(self):
@@ -601,6 +611,20 @@ class SlackData:
                     "block_id": "lsa_coherence_img",
                     "image_url": f"{URI}/lsa_coherence_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
                     "alt_text": "LSA Semantic Coherence",
+                },
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "1D Embedding Space Visualization",
+                        "emoji": True,
+                    },
+                },
+                {
+                    "type": "image",
+                    "block_id": "pp_embedding_img",
+                    "image_url": f"{URI}/pp_embedding_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
+                    "alt_text": "1D Embedding Space Visualization",
                 },
                 {
                     "type": "header",

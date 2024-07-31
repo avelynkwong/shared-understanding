@@ -18,7 +18,7 @@ from oauth.custom_state_store import CustomFileOAuthStateStore
 from db.utils import *
 
 # consent
-from forms.consent_form import generate_consent_form
+from forms.consent_form import create_consent_messages
 
 # get secrets from AWS
 from get_secrets import get_secret
@@ -135,7 +135,13 @@ def load_homepage(client, context):
 def send_consent_form(event, client, context):
     joined_user_id = event.get("user")
     bot_user_id = client.auth_test().get("user_id")
-    form = generate_consent_form()
+    installer_id = installation_store.find_installation(
+        team_id=context.team_id,
+        enterprise_id=context["authorize_result"]["enterprise_id"],
+    ).user_id
+    installer = client.users_info(token=context.bot_token, user=installer_id)["user"][
+        "real_name"
+    ]
 
     # check whether the member who has joined the channel is the slack app
     if joined_user_id == bot_user_id:
@@ -157,13 +163,16 @@ def send_consent_form(event, client, context):
             ]
             # open a DM and send a message
             if not is_bot:
-                response = client.conversations_open(token=context.bot_token, users=m)
-                channel_id = response["channel"]["id"]
-                client.chat_postMessage(
-                    text="Slack Data Consent Form",
-                    token=context.bot_token,
-                    channel=channel_id,
-                    blocks=form,
+                user_name = client.users_info(token=context.bot_token, user=m)["user"][
+                    "real_name"
+                ]
+                create_consent_messages(
+                    user_name,
+                    installer,
+                    context.bot_token,
+                    channel_id,
+                    m,
+                    client,
                 )
 
     else:  # send consent form to new user who has joined
@@ -172,16 +181,16 @@ def send_consent_form(event, client, context):
         ]["is_bot"]
         # open a DM and send a message
         if not is_bot:
-            print("Sending consent form to new user")
-            response = client.conversations_open(
-                token=context.bot_token, users=joined_user_id
-            )
-            channel_id = response["channel"]["id"]
-            client.chat_postMessage(
-                text="Slack Data Consent Form",
-                token=context.bot_token,
-                channel=channel_id,
-                blocks=form,
+            user_name = client.users_info(token=context.bot_token, user=joined_user_id)[
+                "user"
+            ]["real_name"]
+            create_consent_messages(
+                user_name,
+                installer,
+                context.bot_token,
+                channel_id,
+                joined_user_id,
+                client,
             )
 
 
@@ -441,6 +450,20 @@ def handle_questionnaire_submission(ack, body, context):
         "lsa semantic coherence",
         slack_data.lsa_coherence_df.to_json(orient="records"),
     )
+    # Embedding space per-person PCA
+    add_analysis_db(
+        context.team_id,
+        selected_leader_ids,
+        team_size,
+        team_duration,
+        collab_type,
+        industry,
+        task_type,
+        ts,
+        len(slack_data.analysis_users_consented),
+        "embedding space pp",
+        slack_data.pp_embedding_df.to_json(orient="records"),
+    )
 
     # add reacts to database
     add_reacts_db(
@@ -605,7 +628,7 @@ async def oauth_redirect(req: Request):
             installation_store.save(installation)
 
             # create slack_data object
-            workspace_data[installation["team_id"]] = SlackData(
+            workspace_data[installation["user_id"]] = SlackData(
                 app,
                 installation["bot_token"],
                 installation["team_id"],
@@ -679,6 +702,18 @@ async def get_lsa_coherence_image(
 
     # Return the image as a response
     return Response(content=lsa_coherence_img.read(), media_type="image/png")
+
+
+@api.get("/pp_embedding_image")
+@limiter.limit("5/minute")
+async def get_pp_embedding_image(
+    request: Request, token: str, team_id: str, actor_user_id: str, t: str
+):
+    slack_data = get_slack_data(app, token, team_id, actor_user_id)
+    pp_embedding_img = slack_data.create_embedding_vis()
+
+    # Return the image as a response
+    return Response(content=pp_embedding_img.read(), media_type="image/png")
 
 
 if __name__ == "__main__":

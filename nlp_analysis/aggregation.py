@@ -11,7 +11,6 @@ def message_aggregation(df, agg_choice="date"):
     # TODO: make these variables settable by user
     agg_num_messages = 10
     agg_time = datetime.timedelta(minutes=30)
-    agg_date = datetime.timedelta(days=1)
 
     df_output = pd.DataFrame()
     # sort df by channel and then timestamp
@@ -19,7 +18,6 @@ def message_aggregation(df, agg_choice="date"):
         by=["channel_id", "timestamp"], ascending=[True, True]
     ).reset_index(drop=True)
     channels = df_sorted["channel_id"].unique()
-    # print(channels)
     for channel in channels:
         channel_df = df_sorted[df_sorted["channel_id"] == channel]
         channel_df = channel_df.reset_index(drop=True)
