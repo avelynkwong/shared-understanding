@@ -6,15 +6,26 @@ import matplotlib.pyplot as plt
 import math
 import matplotlib.dates as mdates
 import io
-from sentence_transformers import SentenceTransformer
+from get_secrets import get_secret
+from together import Together
+
+together_api_key = get_secret("together_ai")["TOGETHER_API_KEY"]
+together_api_client = Together(api_key=together_api_key)
 
 
 # input is dataframe with documents aggregated by channel-user-days
-def get_embeddings(df, model_name="all-MiniLM-L6-v2"):
-    # load model
-    model = SentenceTransformer(model_name)
-    # encode documents
-    df["embedding"] = model.encode(df["text"].tolist()).tolist()
+def get_embeddings(df, model_name="sentence-transformers/msmarco-bert-base-dot-v5"):
+
+    # list of msgs
+    input_list = df["text"].to_list()
+
+    # create embeddings
+    response = together_api_client.embeddings.create(
+        model=model_name,
+        input=input_list,
+    )
+    df["embedding"] = [x.embedding for x in response.data]
+
     print("Embedded documents")
     # initialize PCA model
     pca = PCA(n_components=1)
@@ -45,6 +56,7 @@ def get_embeddings(df, model_name="all-MiniLM-L6-v2"):
         df_channel_w_group = pd.concat(channel_w_group, ignore_index=True)
         channel_embeddings = np.stack(df_channel_w_group["embedding"].values)
         pca_result = pca.fit_transform(channel_embeddings)
+        # print(pca.explained_variance_ratio_)
         df_channel_w_group["embeddings_1D"] = pca_result.flatten()
         final_output.append(df_channel_w_group)
 
@@ -70,7 +82,7 @@ def vis_preprocessing(df):
             # calculate the standard deviation of the 1D embeddings for all users on a channel-day
             std = np.std(channel_time_df_without_group["embeddings_1D"])
             # get num users on a channel-day
-            n_users = channel_time_df_without_group["user_id"].unique()
+            n_users = len(channel_time_df_without_group["user_id"].unique())
             # assign to the row where user_id is 'group'
             mask = (
                 (df["channel_id"] == channel_id)
@@ -90,7 +102,7 @@ def vis_preprocessing(df):
 
 
 def vis_perperson(df):
-    channels = df["channel"].unique()
+    channels = df["channel_id"].unique()
 
     # styling
     fontsize = 20
@@ -118,9 +130,10 @@ def vis_perperson(df):
         ax.xaxis.set_major_locator(mdates.AutoDateLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
         ax.tick_params(axis="x", labelrotation=70)
-        plt.title(
-            "1D Embedding Space Visualization for Channel: "
-            + str(channel_df["channel_name"].iloc[0])
+        ax.set_title(
+            f"1D Embedding Space Visualization for Channel: {str(channel_df['channel_name'].iloc[0])}",
+            fontsize=fontsize,
+            fontweight="bold",
         )
         ax.text(
             0.95,
@@ -147,7 +160,7 @@ def vis_perperson(df):
             bbox=dict(facecolor="black", alpha=0.5, edgecolor="none"),
         )
 
-        for user, group in channel_df.groupby("user"):
+        for user, group in channel_df.groupby("user_id"):
             # sort by timestamp, then convert back to str
             group.loc[:, "timestamp"] = pd.to_datetime(group.loc[:, "timestamp"])
             if user == "group":

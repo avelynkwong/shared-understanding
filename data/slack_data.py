@@ -123,14 +123,6 @@ class SlackData:
             # show error message if date range contains too many messages
             if total_rows > MAX_DF_SIZE:
                 self.exceeded_df_limit = True
-
-            # # subsample the dataframe if it is too large
-            # if total_rows > MAX_DF_SIZE:
-            #     subsample_rate = max(1, math.ceil(total_rows / MAX_DF_SIZE))
-            #     self.msg_df = self.msg_df.iloc[::subsample_rate]
-            # if len(self.msg_df) > MAX_DF_SIZE:  # trim is still larger than MAX_DF_SIZE
-            #     self.msg_df = self.msg_df.head(MAX_DF_SIZE)
-            # self.subsampling_exclusions = max(0, total_rows - MAX_DF_SIZE)
             else:
                 self.exceeded_df_limit = False
                 self.msg_df = general_preprocessing(self.msg_df)
@@ -140,7 +132,8 @@ class SlackData:
                 print(
                     f"length of df after message processing and aggregation: {len(self.msg_df)}"
                 )
-            self.msg_df.to_csv("message_df_postprocessed.csv")
+
+            # self.msg_df.to_csv("message_df_postprocessed.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name, actor_user_id):

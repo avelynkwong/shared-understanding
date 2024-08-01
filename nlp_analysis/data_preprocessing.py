@@ -56,4 +56,7 @@ def general_preprocessing(data):
     # print("after lemmatizing")
     # print(data_lemmatized)
 
+    # filter out empty messages
+    data = data[data["text"] != ""]
+
     return data
