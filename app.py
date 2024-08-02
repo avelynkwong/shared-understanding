@@ -146,15 +146,15 @@ def send_consent_form(event, client, context):
     # check whether the member who has joined the channel is the slack app
     if joined_user_id == bot_user_id:
 
-        add_user_consent(
-            context.team_id, bot_user_id, tz=None
+        add_consent_record(
+            context.team_id, bot_user_id, tz=None, consented=True
         )  # add bot as a consenting user
 
         channel_id = event["channel"]
         all_channel_users = get_channel_users(context.bot_token, channel_id)
-        consented_users = get_consented_users(context.team_id)
-        # get all users that haven't consented yet
-        non_consented_users = list(set(all_channel_users) - set(consented_users))
+        received_form = get_received_form_users(context.team_id)
+        # get all users that haven't been sent a form yet
+        non_consented_users = list(set(all_channel_users) - set(received_form))
         # send consent forms
         for m in non_consented_users:
             # check if member is a bot
@@ -174,6 +174,8 @@ def send_consent_form(event, client, context):
                     m,
                     client,
                 )
+                # create consent record for user
+                add_consent_record(context.team_id, m, tz=None, consented=False)
 
     else:  # send consent form to new user who has joined
         is_bot = client.users_info(token=context.bot_token, user=joined_user_id)[
@@ -352,7 +354,7 @@ def add_consented_users(ack, body, context):
     user_id = body["user"]["id"]
     user_info = app.client.users_info(token=context.bot_token, user=user_id)["user"]
     tz = user_info.get("tz")
-    add_user_consent(context.team_id, user_id, tz)
+    modify_consent(user_id=user_id, consented=True, tz=tz)
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
     post_consent_confirmation(context.bot_token, app.client, channel_id, user_name)
@@ -361,7 +363,7 @@ def add_consented_users(ack, body, context):
 @app.action("consent_no")
 def remove_consented_users(ack, body, context):
     ack()
-    delete_user_consent(context.actor_user_id)
+    modify_consent(context.actor_user_id, consented=False)
     channel_id = body["channel"]["id"]
     user_name = body["user"]["username"]
     post_dissent_confirmation(context.bot_token, app.client, channel_id, user_name)

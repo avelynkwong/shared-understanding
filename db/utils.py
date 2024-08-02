@@ -12,17 +12,17 @@ config = {
 }
 
 
-def add_user_consent(team_id, user_id, tz):
-    insert_cmd = "INSERT INTO consent (team_id, user_id, timezone) VALUES (%s, %s, %s)"
+def add_consent_record(team_id, user_id, tz, consented):
+    insert_cmd = "INSERT INTO consent (team_id, user_id, timezone, consented) VALUES (%s, %s, %s, %s)"
 
     try:
         # connect to db
         cnx = mysql.connector.connect(**config)
         cursor = cnx.cursor()
         # execute insert cmd
-        cursor.execute(insert_cmd, (team_id, user_id, tz))
+        cursor.execute(insert_cmd, (team_id, user_id, tz, consented))
         cnx.commit()
-        print(f"Consent recorded in DB for user {user_id}.")
+        print(f"Consent record created for: {user_id}.")
 
     except mysql.connector.Error as err:
         print("Error: {}".format(err))
@@ -32,6 +32,47 @@ def add_user_consent(team_id, user_id, tz):
             cursor.close()
         if cnx:
             cnx.close()
+
+
+def modify_consent(user_id, consented, tz=None):
+    if consented:
+        update_cmd = "UPDATE consent SET consented=%s, timezone=%s WHERE user_id=%s"
+        try:
+            # connect to db
+            cnx = mysql.connector.connect(**config)
+            cursor = cnx.cursor()
+            # execute insert cmd
+            cursor.execute(update_cmd, (consented, tz, user_id))
+            cnx.commit()
+            print(f"Consent record updated for: {user_id}.")
+
+        except mysql.connector.Error as err:
+            print("Error: {}".format(err))
+
+        finally:
+            if cursor:
+                cursor.close()
+            if cnx:
+                cnx.close()
+    else:
+        update_cmd = "UPDATE consent SET consented=%s WHERE user_id=%s"
+        try:
+            # connect to db
+            cnx = mysql.connector.connect(**config)
+            cursor = cnx.cursor()
+            # execute insert cmd
+            cursor.execute(update_cmd, (consented, user_id))
+            cnx.commit()
+            print(f"Consent record updated for: {user_id}.")
+
+        except mysql.connector.Error as err:
+            print("Error: {}".format(err))
+
+        finally:
+            if cursor:
+                cursor.close()
+            if cnx:
+                cnx.close()
 
 
 def delete_user_consent(user_id):
@@ -86,8 +127,33 @@ def delete_team_consent(team_id):
             cnx.close()
 
 
-def get_consented_users(team_id):
+def get_received_form_users(team_id):
     select_cmd = "SELECT user_id FROM consent WHERE team_id = %s"
+    try:
+        # connect to db
+        cnx = mysql.connector.connect(**config)
+        cursor = cnx.cursor()
+        # execute delete cmd
+        cursor.execute(select_cmd, (team_id,))
+        result = cursor.fetchall()
+        received_forms = [row[0] for row in result]
+        print("Received form users: ", received_forms)
+
+    except mysql.connector.Error as err:
+        print("Error: {}".format(err))
+        return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if cnx:
+            cnx.close()
+
+    return received_forms
+
+
+def get_consented_users(team_id):
+    select_cmd = "SELECT user_id FROM consent WHERE team_id = %s AND consented=TRUE"
     try:
         # connect to db
         cnx = mysql.connector.connect(**config)

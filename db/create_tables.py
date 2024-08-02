@@ -53,6 +53,7 @@ TABLES["consent"] = (
     "  `team_id` VARCHAR(255),"
     "  `user_id` VARCHAR(255),"
     "  `timezone` VARCHAR(255),"
+    "  `consented` BOOLEAN,"
     "  PRIMARY KEY (`user_id`)"
     ") ENGINE=InnoDB"
 )

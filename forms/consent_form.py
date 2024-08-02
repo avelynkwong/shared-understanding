@@ -94,7 +94,6 @@ def get_latest_message_ts(bot_token, client, channel_id):
             channel=channel_id,
             limit=1,  # Adjust the limit based on how many recent messages you want to fetch
         )["messages"][0]
-        print(last_msg)
         return last_msg["ts"]
     except Exception as e:
         print(f"Error retrieving message history: {e}")

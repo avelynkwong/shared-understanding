@@ -4,7 +4,7 @@ import dataframe_image as dfi
 import matplotlib.pyplot as plt
 import io
 import time
-from db.utils import get_consented_users
+from db.utils import get_received_form_users, get_consented_users
 from dotenv import load_dotenv
 import os
 from nlp_analysis.data_preprocessing import *
@@ -77,6 +77,7 @@ class SlackData:
         self.lsm_df = pd.DataFrame()
         self.lsa_cosine_df = pd.DataFrame()
         self.lsa_coherence_df = pd.DataFrame()
+        self.pp_embedding_df = pd.DataFrame()
         self.reactions = pd.DataFrame(columns=["user_id", "react_type", "timestamp"])
         self.attachments = pd.DataFrame(columns=["user_id", "timestamp"])
 
@@ -101,6 +102,7 @@ class SlackData:
         )
 
         # get the updated list of consented users every time there is a dataframe update
+        # could include a new channel selection
         self.consented_users = get_consented_users(self.team_id)
         # clear old results
         self.clear_analysis_data()
@@ -112,7 +114,7 @@ class SlackData:
             if len(self.msg_df) > MAX_DF_SIZE:
                 self.exceeded_df_limit = True
                 return
-        self.msg_df.to_csv("message_df_raw.csv")
+        # self.msg_df.to_csv("message_df_raw.csv")
 
         # process the df messages
         if not self.msg_df.empty:
@@ -457,7 +459,7 @@ class SlackData:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f":exclamation: Please select channels and/or a valid date range containing more messages (each channel selected should contain at least {MIN_DF_SIZE} active channel-days for analysis). You may need to manually re-select dates if the app homepage has just been opened.",
+                    "text": f":exclamation: Please select channels and/or a valid date range containing more messages (each channel selected should contain at least {MIN_DF_SIZE} active channel-days for analysis). You may need to manually re-select dates if the app homepage has just been opened. For the selected conversations and date range, {self.consent_exclusions} users have not yet consented.",
                 },
             },
         ]
