@@ -35,12 +35,9 @@ class SlackData:
         self.msg_df = pd.DataFrame()
         self.lsm_df = pd.DataFrame()  # eventually holds lsm analysis results
         self.lsa_cosine_df = pd.DataFrame()  # eventually holds lsa cosine sim results
-        self.lsa_coherence_df = (
-            pd.DataFrame()
-        )  # eventually holds lsa sem coherence results
-        self.pp_embedding_df = (
-            pd.DataFrame()
-        )  # eventually holds embedding space results for pp 1D vis
+        self.lsa_coherence_df = pd.DataFrame()  # eventually holds lsa sem cohere res
+        self.pp_embedding_df = pd.DataFrame()  # eventually holds pp embedding results
+        self.group_embedding_df = pd.DataFrame()  # eventually holds group embedding res
         self.selected_conv_ids = []
         self.selected_conv_names = []
         self.user_name_to_id = (
@@ -78,6 +75,7 @@ class SlackData:
         self.lsa_cosine_df = pd.DataFrame()
         self.lsa_coherence_df = pd.DataFrame()
         self.pp_embedding_df = pd.DataFrame()
+        self.group_embedding_df = pd.DataFrame()
         self.reactions = pd.DataFrame(columns=["user_id", "react_type", "timestamp"])
         self.attachments = pd.DataFrame(columns=["user_id", "timestamp"])
 
@@ -135,7 +133,7 @@ class SlackData:
                     f"length of df after message processing and aggregation: {len(self.msg_df)}"
                 )
 
-            # self.msg_df.to_csv("message_df_postprocessed.csv")
+            self.msg_df.to_csv("message_df_postprocessed.csv")
 
     # populate dataframe with messages from a single channel between specified start and end times
     def get_channel_messages(self, channel_name, actor_user_id):
@@ -376,10 +374,14 @@ class SlackData:
     def create_lsm_vis(self):
         # TODO: add look and remove the hard coded value to self.msg_df
         # get lsm values and generate image
-        self.lsm_df = compute_lsm_scores(pd.read_csv("test_agg_w_luke.csv"))
+        # self.lsm_df = get_LIWC_values(self.msg_df) # ACTUAL
+        # self.lsm_df = get_LIWC_values(pd.read_csv("message_df_tiny.csv")) # FOR TESTING
+        self.lsm_df = compute_lsm_scores(
+            pd.read_csv("test_agg_w_luke.csv")
+        )  # HARD CODED, should use result from get_LIWC_values
         self.lsm_df = grouped_lsm_scores(self.lsm_df)
-        lsm_df_avg = moving_avg_lsm(self.lsm_df, WINDOW_SIZE)
-        lsm_image = per_channel_vis_LSM(lsm_df_avg)
+        # lsm_df_avg = moving_avg_lsm(self.lsm_df, WINDOW_SIZE)
+        lsm_image = per_channel_vis_LSM(self.lsm_df)
         return lsm_image
 
     def create_lsa_visualizations(self, method):
@@ -400,11 +402,18 @@ class SlackData:
             lsa_coherence_img = LSA_coherence_vis(self.lsa_coherence_df)
             return lsa_coherence_img
 
-    def create_embedding_vis(self):
+    def create_pp_embedding_vis(self):
         self.pp_embedding_df = get_embeddings(self.msg_df)
-        self.pp_embedding_df = vis_preprocessing(self.pp_embedding_df)
+        self.pp_embedding_df = pp_vis_preprocessing(self.pp_embedding_df)
         pp_embedding_img = vis_perperson(self.pp_embedding_df)
         return pp_embedding_img
+
+    def create_group_embedding_vis(self):
+        self.group_embedding_df = get_embeddings(self.msg_df)
+        self.group_embedding_df = pairwise_comparison(self.group_embedding_df)
+        self.group_embedding_df = grouped_cos_sims(self.group_embedding_df)
+        group_embedding_img = vis_group(self.group_embedding_df)
+        return group_embedding_img
 
     # make sure each channel has enough messages to apply moving average
     def enough_msgs(self):
@@ -611,15 +620,21 @@ class SlackData:
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": "1D Embedding Space Visualization",
+                        "text": "Embedding Space Visualization",
                         "emoji": True,
                     },
                 },
+                # {
+                #     "type": "image",
+                #     "block_id": "pp_embedding_img",
+                #     "image_url": f"{URI}/pp_embedding_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
+                #     "alt_text": "1D Embedding Space Visualization",
+                # },
                 {
                     "type": "image",
-                    "block_id": "pp_embedding_img",
-                    "image_url": f"{URI}/pp_embedding_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
-                    "alt_text": "1D Embedding Space Visualization",
+                    "block_id": "group_embedding_img",
+                    "image_url": f"{URI}/group_embedding_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
+                    "alt_text": "Group Embedding Space Visualization",
                 },
                 {
                     "type": "header",

@@ -466,6 +466,20 @@ def handle_questionnaire_submission(ack, body, context):
         "embedding space pp",
         slack_data.pp_embedding_df.to_json(orient="records"),
     )
+    # Embedding space group results
+    add_analysis_db(
+        context.team_id,
+        selected_leader_ids,
+        team_size,
+        team_duration,
+        collab_type,
+        industry,
+        task_type,
+        ts,
+        len(slack_data.analysis_users_consented),
+        "embedding space group",
+        slack_data.group_embedding_df.to_json(orient="records"),
+    )
 
     # add reacts to database
     add_reacts_db(
@@ -712,10 +726,22 @@ async def get_pp_embedding_image(
     request: Request, token: str, team_id: str, actor_user_id: str, t: str
 ):
     slack_data = get_slack_data(app, token, team_id, actor_user_id)
-    pp_embedding_img = slack_data.create_embedding_vis()
+    pp_embedding_img = slack_data.create_pp_embedding_vis()
 
     # Return the image as a response
     return Response(content=pp_embedding_img.read(), media_type="image/png")
+
+
+@api.get("/group_embedding_image")
+@limiter.limit("5/minute")
+async def get_group_embedding_image(
+    request: Request, token: str, team_id: str, actor_user_id: str, t: str
+):
+    slack_data = get_slack_data(app, token, team_id, actor_user_id)
+    group_embedding_img = slack_data.create_group_embedding_vis()
+
+    # Return the image as a response
+    return Response(content=group_embedding_img.read(), media_type="image/png")
 
 
 if __name__ == "__main__":

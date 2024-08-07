@@ -5,6 +5,91 @@ import matplotlib.pyplot as plt
 import math
 import io
 import matplotlib.dates as mdates
+from get_secrets import get_secret
+import json
+import requests
+
+liwc = get_secret("liwc_api_secrets")
+LIWC_URL = liwc["URL"]
+LIWC_API_KEY = liwc["API_KEY"]
+LIWC_API_SECRET = liwc["API_SECRET"]
+
+
+# Function to send POST request and handle response
+def process_batch(batch):
+    # convert df to list of dictionaries
+    data = batch.rename(columns={"text": "content"})[["request_id", "content"]].to_dict(
+        orient="records"
+    )
+    # convert list of dictionaries to JSON
+    data_json = json.dumps(data)
+    # Send POST request
+    res = requests.post(LIWC_URL, auth=(LIWC_API_KEY, LIWC_API_SECRET), data=data_json)
+    print(res.json())
+
+    request_ids = []
+    liwcs = []
+    # check if response is JSON and process it
+    try:
+        resp_json = res.json()
+        for item in resp_json["results"]:
+            print(item)
+            request_ids.append(item["request_id"])
+            liwcs.append(item["liwc"])
+    except json.JSONDecodeError:
+        print("Failed to decode JSON response")
+        print(f"Response content: {res.text}")
+        resp_json = []
+    return request_ids, liwcs
+
+
+def get_LIWC_values(df):
+    # Add a request_id column
+    df["request_id"] = [f"req-{i+1}" for i in range(len(df))]
+    # process dataframe in batches
+    batch_size = 1000
+    request_ids = []
+    ppron = []
+    ipron = []
+    article = []
+    prep = []
+    negate = []
+    adverb = []
+    auxverb = []
+    conj = []
+
+    for start in range(0, len(df), batch_size):
+        end = start + batch_size
+        batch = df[start:end]
+        r_ids, ls = process_batch(batch)
+
+        for i in range(len(ls)):
+            request_ids.append(r_ids[i])
+            ppron.append(ls[i]["personal_pronouns"])
+            ipron.append(ls[i]["impersonal_pronouns"])
+            article.append(ls[i]["articles"])
+            prep.append(ls[i]["prepositions"])
+            negate.append(ls[i]["negations"])
+            adverb.append(ls[i]["adverbs"])
+            auxverb.append(ls[i]["auxiliary_verbs"])
+            conj.append(ls[i]["conjunctions"])
+
+    liwc_data = {
+        "request_id": request_ids,
+        "ppron": ppron,
+        "ipron": ipron,
+        "article": article,
+        "prep": prep,
+        "negate": negate,
+        "adverb": adverb,
+        "auxverb": auxverb,
+        "conj": conj,
+    }
+    # convert responses to DataFrame
+    liwc_data = pd.DataFrame(liwc_data)
+    # merge the original df with the liwc df on 'request_id'
+    result_df = df.merge(liwc_data, on="request_id", how="left")
+    return result_df
 
 
 def avg_lsm_score(categories, person_a, person_b):
@@ -101,6 +186,8 @@ def grouped_lsm_scores(df_result):
 
 
 def moving_avg_lsm(group_avg, window_size):
+    if len(group_avg) < window_size:
+        window_size = 1
     group_moving_avg = []
     for channel_id in group_avg["channel_id"].unique():
         channel_df = group_avg[group_avg["channel_id"] == channel_id]

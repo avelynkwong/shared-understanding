@@ -58,5 +58,6 @@ def general_preprocessing(data):
 
     # filter out empty messages
     data = data[data["text"] != ""]
+    data = data[data["text"] != None]
 
     return data

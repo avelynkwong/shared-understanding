@@ -62,8 +62,7 @@ def create_consent_messages(
         files=[{"id": file_id, "title": "consent_agreement"}],
         channel_id=channel_id,
     )
-
-    time.sleep(2)
+    time.sleep(1)
 
     # allow user to click consent-yes or no
     consent_button = [
