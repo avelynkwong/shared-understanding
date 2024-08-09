@@ -315,8 +315,10 @@ def vis_group(group_avg, agg_type="date"):
             fontsize=fontsize,
             fontweight="bold",
         )
-        ax.set_ylim(0, 1.09)
-        ax.set_yticks(np.arange(0, 1.1, 0.1))
+        y_ax_lower_lim = math.floor(min(channel_df["avg_cos_sim"]) * 100) / 100
+        y_ax_upper_lim = math.ceil(max(channel_df["avg_cos_sim"]) * 100) / 100
+        ax.set_ylim(y_ax_lower_lim, y_ax_upper_lim)
+        ax.set_yticks(np.arange(y_ax_lower_lim, y_ax_upper_lim, 0.01))
         ax.xaxis.set_major_locator(mdates.AutoDateLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
         ax.tick_params(axis="x", labelrotation=70)

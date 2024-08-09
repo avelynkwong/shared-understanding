@@ -13,6 +13,7 @@ from nlp_analysis.lsm import *
 from nlp_analysis.lsa import *
 from nlp_analysis.embedding import *
 from slack_sdk.errors import SlackApiError
+from nlp_analysis.LLM_summarization import get_LLM_summaries
 
 # maximum messages to store in dataframe
 MAX_DF_SIZE = 5000
@@ -38,6 +39,7 @@ class SlackData:
         self.lsa_coherence_df = pd.DataFrame()  # eventually holds lsa sem cohere res
         self.pp_embedding_df = pd.DataFrame()  # eventually holds pp embedding results
         self.group_embedding_df = pd.DataFrame()  # eventually holds group embedding res
+        self.llm_summarized_df = pd.DataFrame()
         self.selected_conv_ids = []
         self.selected_conv_names = []
         self.user_name_to_id = (
@@ -78,6 +80,7 @@ class SlackData:
         self.group_embedding_df = pd.DataFrame()
         self.reactions = pd.DataFrame(columns=["user_id", "react_type", "timestamp"])
         self.attachments = pd.DataFrame(columns=["user_id", "timestamp"])
+        self.llm_summarized_df = pd.DataFrame()
 
     def get_invited_conversations(self):
         # list of conversations app has access to (has been invited into channel)
@@ -384,10 +387,22 @@ class SlackData:
         lsm_image = per_channel_vis_LSM(self.lsm_df)
         return lsm_image
 
-    def create_lsa_visualizations(self, method):
+    def create_lsa_visualizations(self, method, use_llm_summary=True):
+        if use_llm_summary:
+            try:
+                self.llm_summarized_df = get_LLM_summaries(self.msg_df)
+                df = self.llm_summarized_df
+                if len(self.llm_summarized_df) == 0:
+                    print("Failed LLM summarization")
+                    df = self.msg_df
+            except:
+                print("Failed LLM summarization")
+                df = self.msg_df
+        else:
+            df = self.msg_df
         if method == "cosine_sim":
             self.lsa_cosine_df = compute_LSA_analysis(
-                self.msg_df,
+                df,
                 step=2,
                 method=method,
             )
@@ -395,7 +410,7 @@ class SlackData:
             return lsa_cosine_img
         elif method == "semantic_coherence":
             self.lsa_coherence_df = compute_LSA_analysis(
-                self.msg_df,
+                df,
                 step=2,
                 method=method,
             )
@@ -433,6 +448,7 @@ class SlackData:
         vis_error=False,
         slackapi_limit_exceeded=False,
     ):
+        print("here?")
         slack_limit_exceeded_block = [
             {
                 "type": "section",
