@@ -17,24 +17,25 @@ def parse_output(output):
                 result.append(data[1:3])
 
     # create the df
-    result = pd.DataFrame(result, columns=["user_id", "summary"])
+    result = pd.DataFrame(result, columns=["user_id", "text"])
     return result
 
 
 def get_LLM_summaries(df):
     print("Generating LLM summaries")
-    batch_size = 2000
+    batch_size = 100
     result = []
 
     for channel_id in df["channel_id"].unique():
         for time in df["timestamp"].unique():
+            print("new channel day")
             channel_day_df = df[
                 (df["channel_id"] == channel_id) & (df["timestamp"] == time)
             ]
             if channel_day_df.empty:
                 continue
-            for i in range(0, len(df), batch_size):
-                batch = df.iloc[i : i + batch_size]
+            for i in range(0, len(channel_day_df), batch_size):
+                batch = channel_day_df.iloc[i : i + batch_size]
                 conversation = "\n\n\n\n\nuser_id\tmessages\n" + "\n".join(
                     batch.apply(lambda row: f"{row['user_id']}\t{row['text']}", axis=1)
                 )

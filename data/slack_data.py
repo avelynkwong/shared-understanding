@@ -92,7 +92,7 @@ class SlackData:
         return
 
     # populate dataframe with messages from all selected channels
-    def update_dataframe(self, actor_user_id):
+    def update_dataframe(self, actor_user_id, use_llm_summary=False):
         # publish loading view
         self.app.client.views_publish(
             token=self.bot_token,
@@ -135,6 +135,15 @@ class SlackData:
                 print(
                     f"length of df after message processing and aggregation: {len(self.msg_df)}"
                 )
+
+                if use_llm_summary:
+                    try:
+                        print("Getting LLM summaries")
+                        self.llm_summarized_df = get_LLM_summaries(self.msg_df)
+                        print(self.llm_summarized_df)
+                    except:
+                        print("Error producing LLM summaries")
+                    self.llm_summarized_df = self.msg_df
 
             self.msg_df.to_csv("message_df_postprocessed.csv")
 
@@ -387,17 +396,9 @@ class SlackData:
         lsm_image = per_channel_vis_LSM(self.lsm_df)
         return lsm_image
 
-    def create_lsa_visualizations(self, method, use_llm_summary=True):
+    def create_lsa_visualizations(self, method, use_llm_summary=False):
         if use_llm_summary:
-            try:
-                self.llm_summarized_df = get_LLM_summaries(self.msg_df)
-                df = self.llm_summarized_df
-                if len(self.llm_summarized_df) == 0:
-                    print("Failed LLM summarization")
-                    df = self.msg_df
-            except:
-                print("Failed LLM summarization")
-                df = self.msg_df
+            df = self.llm_summarized_df
         else:
             df = self.msg_df
         if method == "cosine_sim":
@@ -423,8 +424,11 @@ class SlackData:
         pp_embedding_img = vis_perperson(self.pp_embedding_df)
         return pp_embedding_img
 
-    def create_group_embedding_vis(self):
-        self.group_embedding_df = get_embeddings(self.msg_df)
+    def create_group_embedding_vis(self, use_llm_summary=False):
+        if use_llm_summary:
+            self.group_embedding_df = get_embeddings(self.llm_summarized_df)
+        else:
+            self.group_embedding_df = get_embeddings(self.msg_df)
         self.group_embedding_df = pairwise_comparison(self.group_embedding_df)
         self.group_embedding_df = grouped_cos_sims(self.group_embedding_df)
         group_embedding_img = vis_group(self.group_embedding_df)
