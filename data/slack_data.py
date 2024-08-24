@@ -35,6 +35,8 @@ class SlackData:
         self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
         self.lsm_df = pd.DataFrame()  # eventually holds lsm analysis results
+        self.date_lsm_run = None
+        self.todays_lsm_count = 0
         self.lsa_cosine_df = pd.DataFrame()  # eventually holds lsa cosine sim results
         self.lsa_coherence_df = pd.DataFrame()  # eventually holds lsa sem cohere res
         self.pp_embedding_df = pd.DataFrame()  # eventually holds pp embedding results
@@ -386,11 +388,16 @@ class SlackData:
     def create_lsm_vis(self):
         # TODO: add look and remove the hard coded value to self.msg_df
         # get lsm values and generate image
-        # self.lsm_df = get_LIWC_values(self.msg_df) # ACTUAL
+        self.lsm_df, self.todays_lsm_count, self.date_lsm_run = get_LIWC_values(
+            self.msg_df, self.date_lsm_run, self.todays_lsm_count
+        )  # ACTUAL
+        if self.lsm_df.empty:
+            return None
         # self.lsm_df = get_LIWC_values(pd.read_csv("message_df_tiny.csv")) # FOR TESTING
-        self.lsm_df = compute_lsm_scores(
-            pd.read_csv("test_agg_w_luke.csv")
-        )  # HARD CODED, should use result from get_LIWC_values
+        # self.lsm_df.to_csv("lsm_df_after_liwc.csv")
+        self.lsm_df = compute_lsm_scores(self.lsm_df)
+        if self.lsm_df.empty:  # no valid pairs of users on each channel-day
+            return None
         self.lsm_df = grouped_lsm_scores(self.lsm_df)
         # lsm_df_avg = moving_avg_lsm(self.lsm_df, WINDOW_SIZE)
         lsm_image = per_channel_vis_LSM(self.lsm_df)
@@ -452,7 +459,6 @@ class SlackData:
         vis_error=False,
         slackapi_limit_exceeded=False,
     ):
-        print("here?")
         slack_limit_exceeded_block = [
             {
                 "type": "section",
@@ -617,6 +623,13 @@ class SlackData:
                     },
                 },
                 {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "This graph relies on a method that describes each message as a combination of different topics (Dong, 2005). It assumes that the team’s 'knowledge' can be described by the topics represented by all messages sent during the entire time period. At each timestamp, it calculates how similar each individual's cumulative “knowledge” is to the team’s entire “knowledge.” A value close to 1 shows that the individual or team knowledge at time T is similar to the team’s total knowledge. Of interest in this graph is how quickly the team reaches it’s total 'knowledge'.",
+                    },
+                },
+                {
                     "type": "image",
                     "block_id": "lsa_cosine_mg",
                     "image_url": f"{URI}/lsa_cosine_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
@@ -628,6 +641,13 @@ class SlackData:
                         "type": "plain_text",
                         "text": "Semantic Coherence",
                         "emoji": True,
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "This graph relies on the same method above that describes each message as a combination of different topics (Dong, 2005).  Semantic coherence is a team-wide metric that measures how similar each message is (to what extent each message discusses the same topic), or how much each message represents similar knowledge. A value closer to one means that each person discusses each topic at similar frequencies, whereas a value closer to zero means each person is discussing different topics.",
                     },
                 },
                 {
@@ -644,12 +664,13 @@ class SlackData:
                         "emoji": True,
                     },
                 },
-                # {
-                #     "type": "image",
-                #     "block_id": "pp_embedding_img",
-                #     "image_url": f"{URI}/pp_embedding_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
-                #     "alt_text": "1D Embedding Space Visualization",
-                # },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "This graph uses embedding spaces, which is a method that transforms words into vectors, encoding the semantic meaning of the word, such that similar words have similar vectors (Reimers, Gurevych, 2019). This graph represents the average distance (similarity) in word use across all combinations of pairs within the team. Unlike the other methods, this method acknowledges that team members might use different, but similar, words to mean the same thing.",
+                    },
+                },
                 {
                     "type": "image",
                     "block_id": "group_embedding_img",
@@ -660,15 +681,29 @@ class SlackData:
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": "Latent Semantic Mapping",
+                        "text": "Language Style Matching",
                         "emoji": True,
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "This graph measures the extent to which your team uses shared language, measured by how frequently each team member uses specific categories of words (Ireland and Pennebaker, 2010).  The y-axis represents the average similarity in frequency across all combinations of pairs within the team. A value of 1 represents identical language style and a value of 0 represents dissimilar language style across the team.",
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "Note: the maximum number of messages analyzed per day for this method is 20,000. The visualization will stop generating until the next day if you have reached the limit.",
                     },
                 },
                 {
                     "type": "image",
                     "block_id": "lsm_img",
                     "image_url": f"{URI}/lsm_image?token={bot_token}&team_id={team_id}&actor_user_id={actor_user_id}&t={str(time.time())}",
-                    "alt_text": "Latent Semantic Matching Graph",
+                    "alt_text": "Language Style Matching Graph",
                 },
                 {
                     "type": "actions",

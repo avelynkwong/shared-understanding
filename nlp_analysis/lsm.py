@@ -8,6 +8,7 @@ import matplotlib.dates as mdates
 from get_secrets import get_secret
 import json
 import requests
+import datetime
 
 liwc = get_secret("liwc_api_secrets")
 LIWC_URL = liwc["URL"]
@@ -25,7 +26,6 @@ def process_batch(batch):
     data_json = json.dumps(data)
     # Send POST request
     res = requests.post(LIWC_URL, auth=(LIWC_API_KEY, LIWC_API_SECRET), data=data_json)
-    print(res.json())
 
     request_ids = []
     liwcs = []
@@ -33,7 +33,6 @@ def process_batch(batch):
     try:
         resp_json = res.json()
         for item in resp_json["results"]:
-            print(item)
             request_ids.append(item["request_id"])
             liwcs.append(item["liwc"])
     except json.JSONDecodeError:
@@ -43,7 +42,37 @@ def process_batch(batch):
     return request_ids, liwcs
 
 
-def get_LIWC_values(df):
+def get_LIWC_values(df, prev_lsm_run_date, todays_lsm_count):
+
+    today = datetime.datetime.today().strftime("%Y-%m-%d")
+    if today != prev_lsm_run_date:
+        todays_lsm_count = 0  # reset count
+
+    # limit to 1000 words per channel
+    max_words_per_day = 20000
+    max_words_per_channel = 5000
+    keep = []
+    for channel_id, group in df.groupby("channel_id"):
+        cumulative_words = 0
+
+        for idx, row in group.iterrows():
+            word_count = len(row["text"].split())
+
+            # check if adding the current message will exceed the word limit
+            if cumulative_words + word_count <= max_words_per_channel:
+                cumulative_words += word_count
+                keep.append(idx)
+            else:
+                break
+
+    todays_lsm_count += cumulative_words
+    print("LSM count for today: ", todays_lsm_count)
+    if todays_lsm_count > max_words_per_day:
+        return pd.DataFrame(), todays_lsm_count, today
+
+    # filter the original df to keep only the rows with the selected indices
+    df = df.loc[keep]
+
     # Add a request_id column
     df["request_id"] = [f"req-{i+1}" for i in range(len(df))]
     # process dataframe in batches
@@ -89,7 +118,7 @@ def get_LIWC_values(df):
     liwc_data = pd.DataFrame(liwc_data)
     # merge the original df with the liwc df on 'request_id'
     result_df = df.merge(liwc_data, on="request_id", how="left")
-    return result_df
+    return result_df, todays_lsm_count, today
 
 
 def avg_lsm_score(categories, person_a, person_b):
@@ -234,6 +263,8 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
 
     for i, channel in enumerate(channels):
         channel_df = group_avg[group_avg["channel_id"] == channel]
+        channel_df.loc[:, "timestamp"] = pd.to_datetime(channel_df.loc[:, "timestamp"])
+        channel_df = channel_df.sort_values(by="timestamp")
         ax = axs[i]
         if agg_type == "date":
             ax.set_xlabel("Date")
@@ -243,7 +274,9 @@ def per_channel_vis_LSM(group_avg, agg_type="date"):
             ax.set_xlabel("Number of Time Intervals")
         ax.set_ylabel("Average Shared Language (0-1)")
         ax.set_title(
-            str(channel_df["channel_name"].iloc[0]),
+            str(
+                f'Average Language Style Matching Between Users for Channel: {channel_df["channel_name"].iloc[0]}'
+            ),
             fontsize=fontsize,
             fontweight="bold",
         )

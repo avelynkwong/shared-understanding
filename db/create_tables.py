@@ -93,6 +93,15 @@ TABLES["attachments"] = (
     ") ENGINE=InnoDB"
 )
 
+TABLES["lsm_count"] = (
+    "CREATE TABLE `lsm_count` ("
+    "  `team_id` VARCHAR(255),"
+    "  `timestamp` DATETIME,"
+    "  `lsm_count` INT,"
+    "  PRIMARY KEY (`team_id`)"
+    ") ENGINE=InnoDB"
+)
+
 cnx = mysql.connector.connect(**config)
 cursor = cnx.cursor()
 

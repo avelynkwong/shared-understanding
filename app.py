@@ -133,6 +133,7 @@ def load_homepage(client, context):
 # when slack app joins a channel, send consent form to members in that channel if they haven't received it yet
 @app.event("member_joined_channel")
 def send_consent_form(event, client, context):
+    print("User joined a channel!")
     joined_user_id = event.get("user")
     bot_user_id = client.auth_test().get("user_id")
     installer_id = installation_store.find_installation(
@@ -143,6 +144,8 @@ def send_consent_form(event, client, context):
         "real_name"
     ]
 
+    channel_id = event["channel"]
+
     # check whether the member who has joined the channel is the slack app
     if joined_user_id == bot_user_id:
 
@@ -150,7 +153,6 @@ def send_consent_form(event, client, context):
             context.team_id, bot_user_id, tz=None, consented=True
         )  # add bot as a consenting user
 
-        channel_id = event["channel"]
         all_channel_users = get_channel_users(context.bot_token, channel_id)
         received_form = get_received_form_users(context.team_id)
         # get all users that haven't been sent a form yet
