@@ -35,8 +35,6 @@ class SlackData:
         self.end_date = str(datetime.datetime.today().strftime("%Y-%m-%d"))
         self.msg_df = pd.DataFrame()
         self.lsm_df = pd.DataFrame()  # eventually holds lsm analysis results
-        self.date_lsm_run = None
-        self.todays_lsm_count = 0
         self.lsa_cosine_df = pd.DataFrame()  # eventually holds lsa cosine sim results
         self.lsa_coherence_df = pd.DataFrame()  # eventually holds lsa sem cohere res
         self.pp_embedding_df = pd.DataFrame()  # eventually holds pp embedding results
@@ -385,19 +383,42 @@ class SlackData:
         unix = dt.timestamp()
         return unix
 
+    def lsm_limit_img(self):
+        fig, ax = plt.subplots(figsize=(15, 6))
+        # Remove borders and axis
+        ax.set_frame_on(False)
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        # Add text in the middle of the plot
+        text = "LSM limit exceeded. Try again tomorrow."
+        plt.text(
+            0.5,
+            0.5,
+            text,
+            horizontalalignment="center",
+            verticalalignment="center",
+            fontsize=20,
+            color="red",
+            transform=ax.transAxes,
+        )
+        # save plot to buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.5)
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+
     def create_lsm_vis(self):
         # TODO: add look and remove the hard coded value to self.msg_df
         # get lsm values and generate image
-        self.lsm_df, self.todays_lsm_count, self.date_lsm_run = get_LIWC_values(
-            self.msg_df, self.date_lsm_run, self.todays_lsm_count
-        )  # ACTUAL
+        self.lsm_df = get_LIWC_values(self.msg_df, self.team_id)  # ACTUAL
         if self.lsm_df.empty:
-            return None
+            return self.lsm_limit_img()
         # self.lsm_df = get_LIWC_values(pd.read_csv("message_df_tiny.csv")) # FOR TESTING
         # self.lsm_df.to_csv("lsm_df_after_liwc.csv")
         self.lsm_df = compute_lsm_scores(self.lsm_df)
         if self.lsm_df.empty:  # no valid pairs of users on each channel-day
-            return None
+            return self.lsm_limit_img()
         self.lsm_df = grouped_lsm_scores(self.lsm_df)
         # lsm_df_avg = moving_avg_lsm(self.lsm_df, WINDOW_SIZE)
         lsm_image = per_channel_vis_LSM(self.lsm_df)
@@ -696,7 +717,7 @@ class SlackData:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "Note: the maximum number of messages analyzed per day for this method is 20,000. The visualization will stop generating until the next day if you have reached the limit.",
+                        "text": "Note: the maximum number of words analyzed per day for this method is 20,000. The visualization will stop generating until the next day if you have reached the limit.",
                     },
                 },
                 {

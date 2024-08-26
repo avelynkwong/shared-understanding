@@ -16,7 +16,7 @@ together_api_client = Together(api_key=together_api_key)
 
 
 # input is dataframe with documents aggregated by channel-user-days
-def get_embeddings(df, model_name="sentence-transformers/msmarco-bert-base-dot-v5"):
+def get_embeddings(df, model_name="togethercomputer/m2-bert-80M-32k-retrieval"):
 
     # list of msgs
     input_list = df["text"].to_list()

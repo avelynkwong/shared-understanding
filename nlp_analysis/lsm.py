@@ -9,6 +9,11 @@ from get_secrets import get_secret
 import json
 import requests
 import datetime
+from db.utils import update_lsm_count_db, get_prev_lsm_count
+
+# limit to 1000 words per channel
+MAX_WORDS_PER_DAY = 20000
+MAX_WORDS_PER_CHANNEL = 5000
 
 liwc = get_secret("liwc_api_secrets")
 LIWC_URL = liwc["URL"]
@@ -42,15 +47,13 @@ def process_batch(batch):
     return request_ids, liwcs
 
 
-def get_LIWC_values(df, prev_lsm_run_date, todays_lsm_count):
+def get_LIWC_values(df, team_id):
+
+    prev_lsm_run_date, todays_lsm_count = get_prev_lsm_count(team_id)
 
     today = datetime.datetime.today().strftime("%Y-%m-%d")
-    if today != prev_lsm_run_date:
-        todays_lsm_count = 0  # reset count
-
-    # limit to 1000 words per channel
-    max_words_per_day = 20000
-    max_words_per_channel = 5000
+    if not prev_lsm_run_date or today != prev_lsm_run_date.strftime("%Y-%m-%d"):
+        todays_lsm_count = 0  # new day, count is 0
     keep = []
     for channel_id, group in df.groupby("channel_id"):
         cumulative_words = 0
@@ -59,7 +62,7 @@ def get_LIWC_values(df, prev_lsm_run_date, todays_lsm_count):
             word_count = len(row["text"].split())
 
             # check if adding the current message will exceed the word limit
-            if cumulative_words + word_count <= max_words_per_channel:
+            if cumulative_words + word_count <= MAX_WORDS_PER_CHANNEL:
                 cumulative_words += word_count
                 keep.append(idx)
             else:
@@ -67,8 +70,9 @@ def get_LIWC_values(df, prev_lsm_run_date, todays_lsm_count):
 
     todays_lsm_count += cumulative_words
     print("LSM count for today: ", todays_lsm_count)
-    if todays_lsm_count > max_words_per_day:
-        return pd.DataFrame(), todays_lsm_count, today
+    if todays_lsm_count > MAX_WORDS_PER_DAY:
+        update_lsm_count_db(team_id, todays_lsm_count, today)
+        return pd.DataFrame()
 
     # filter the original df to keep only the rows with the selected indices
     df = df.loc[keep]
@@ -118,7 +122,10 @@ def get_LIWC_values(df, prev_lsm_run_date, todays_lsm_count):
     liwc_data = pd.DataFrame(liwc_data)
     # merge the original df with the liwc df on 'request_id'
     result_df = df.merge(liwc_data, on="request_id", how="left")
-    return result_df, todays_lsm_count, today
+    # update the count in db
+    update_lsm_count_db(team_id, todays_lsm_count, today)
+
+    return result_df
 
 
 def avg_lsm_score(categories, person_a, person_b):

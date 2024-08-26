@@ -268,3 +268,57 @@ def add_analysis_db(
             cursor.close()
         if cnx:
             cnx.close()
+
+
+def update_lsm_count_db(team_id, lsm_count, timestamp):
+
+    update_cmd = "INSERT INTO lsm_count (team_id, timestamp, lsm_count) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE timestamp = VALUES(timestamp), lsm_count = VALUES(lsm_count)"
+    values = (team_id, timestamp, lsm_count)
+
+    try:
+        # connect to db
+        cnx = mysql.connector.connect(**config)
+        cursor = cnx.cursor()
+        # Execute the SQL query
+        cursor.execute(update_cmd, values)
+
+        # Commit the transaction
+        cnx.commit()
+
+        print("Record inserted/updated successfully")
+
+    except mysql.connector.Error as err:
+        print("Error: {}".format(err))
+
+    finally:
+        if cursor:
+            cursor.close()
+        if cnx:
+            cnx.close()
+
+
+def get_prev_lsm_count(team_id):
+
+    select_cmd = "SELECT timestamp, lsm_count FROM lsm_count WHERE team_id = %s"
+    try:
+        # connect to db
+        cnx = mysql.connector.connect(**config)
+        cursor = cnx.cursor()
+        # execute insert cmd
+        cursor.execute(select_cmd, (team_id,))
+        record = cursor.fetchone()
+
+        if not record:
+            return None, None
+
+        timestamp, lsm_count = record
+        return timestamp, lsm_count
+
+    except mysql.connector.Error as err:
+        print("Error: {}".format(err))
+
+    finally:
+        if cursor:
+            cursor.close()
+        if cnx:
+            cnx.close()
